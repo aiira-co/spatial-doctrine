@@ -1,18 +1,25 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Spatial\Entity;
 
+use Config;
+use Doctrine\Common\Cache\ArrayCache;
+use Doctrine\Common\Cache\MemcachedCache;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\ORMException;
 
 class DoctrineEntity
 {
-    private $_config;
+    private Configuration $_config;
     private $_cache;
 
     /**
      * Constructor
      *
-     * @return void
+     * @param string $domain
      */
     public function __construct(string $domain)
     {
@@ -23,14 +30,15 @@ class DoctrineEntity
      * Set default configs for
      * cahce and proxy with production mode.
      *
+     * @param string $domain
      * @return void
      */
     private function _onInit(string $domain)
     {
-        $config = new Configuration;
+        $config = new Configuration();
         // get values from config
         include_once './config.php';
-        $enableProdMode = (new \Config)->enableProdMode;
+        $enableProdMode = (new Config)->enableProdMode;
 
         // Set defaults
         if ($enableProdMode) {
@@ -44,12 +52,13 @@ class DoctrineEntity
             // $configuration = new Configuration();
             // ...
             // $configuration->setMetadataCacheImpl($metadataCache);
-            $cache = new \Doctrine\Common\Cache\ApcCache;
+            $cache = new MemcachedCache();
             $config->setAutoGenerateProxyClasses(false);
+//            make sure to use redis
         } else {
             // set default to dev mode
 
-            $cache = new \Doctrine\Common\Cache\ArrayCache;
+            $cache = new ArrayCache();
             $config->setAutoGenerateProxyClasses(true);
         }
         // echo __DIR__;
@@ -75,13 +84,14 @@ class DoctrineEntity
     }
 
     /**
-     * Return DOctrine's
+     * Return Doctrine's
      * EntityManager based on the connection string
      *
-     * @param [type] $connectionOptions
-     * @return void
+     * @param array $connectionOptions
+     * @return EntityManager
+     * @throws ORMException
      */
-    public function entityManager(array $connectionOptions)
+    public function entityManager(array $connectionOptions): EntityManager
     {
         return EntityManager::create($connectionOptions, $this->_config);
     }
@@ -95,65 +105,48 @@ class DoctrineEntity
     public function isDev(bool $dev = false): self
     {
         if ($dev) {
-            $this->_cache = new \Doctrine\Common\Cache\ArrayCache;
+            $this->_cache = new ArrayCache;
             $this->_config->setAutoGenerateProxyClasses(true);
         } else {
-            $this->_cache = new \Doctrine\Common\Cache\ApcCache;
+            $this->_cache = new MemcachedCache();
             $this->_config->setAutoGenerateProxyClasses(false);
         }
         return $this;
     }
 
     // Proxi Directory
+
     /**
      * Configuration Options
      * The following sections describe all the configuration options
      * available on a Doctrine\ORM\Configuration instance.
      *
-     * @param [type] $connectionOptions
+     * @param string $dir
      * @return self
      */
     public function setProxyDir(string $dir = '/src/core/domain/media/proxies'): self
     {
         // print_r($this->_config);
-        // $this->_config->setProxyDir($dir);
+        $this->_config->setProxyDir($dir);
         return $this;
     }
 
-    /**
-     * Gets the directory where Doctrine generates any proxy claseses
-     *
-     * @param [type] $connectionOptions
-     * @return string
-     */
-    public function getProxyDir(): string
-    {
-        return $this->_config->getProxyDir();
-    }
+
     // Proxy Namespace
 
     /**
      * Sets the namespace to use for generated proxy classes.
      *
-     * @param [type] $connectionOptions
-     * @return string
+     * @param string $namespace
+     * @return self
      */
-    public function setProxyNamespace($namespace = 'Core\Domain'): self
+    public function setProxyNamespace(string $namespace = 'Core\Domain'): self
     {
         $this->_config->setProxyNamespace($namespace);
         return $this;
     }
 
-    /**
-     * Gets the namespace to use for generated proxy classes.
-     *
-     * @param [type] $connectionOptions
-     * @return string
-     */
-    public function getProxyNamespace(): string
-    {
-        return $this->_config->getProxyDir();
-    }
+
     /**
      * Sets the metadata driver implementation that is used
      * by Doctrine to acquire the object-relational
@@ -167,16 +160,5 @@ class DoctrineEntity
         $this->_config->setMetadataDriverImpl($driver);
         return $this;
     }
-    /**
-     * Gets the metadata driver implementation that is used
-     * by Doctrine to acquire the object-relational
-     * metadata for your classes
-     *
-     * @param [type] $connectionOptions
-     * @return string
-     */
-    public function getMetadataDriverImpl(): string
-    {
-        return $this->_config->getMetadataDriverImpl();
-    }
+
 }
