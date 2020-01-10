@@ -14,7 +14,7 @@ use Doctrine\ORM\ORMException;
 class DoctrineEntity
 {
     private Configuration $_config;
-    private $_cache;
+    private object $_cache;
 
     /**
      * Constructor
@@ -28,12 +28,12 @@ class DoctrineEntity
 
     /**
      * Set default configs for
-     * cahce and proxy with production mode.
+     * cache and proxy with production mode.
      *
      * @param string $domain
      * @return void
      */
-    private function _onInit(string $domain)
+    private function _onInit(string $domain): void
     {
         $config = new Configuration();
         // get values from config
@@ -64,7 +64,7 @@ class DoctrineEntity
         // echo __DIR__;
         $domainRootPath = './src/core/domain/';
 
-        // I might need to force valye of driver for doamin folder at constructor
+        // I might need to force value of driver for domain folder at constructor
         // Driver Implementation
         $driverImpl = $config
             ->newDefaultAnnotationDriver($domainRootPath . $domain);
@@ -114,7 +114,7 @@ class DoctrineEntity
         return $this;
     }
 
-    // Proxi Directory
+    // Proxies Directory
 
     /**
      * Configuration Options
