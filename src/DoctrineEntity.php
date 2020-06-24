@@ -62,7 +62,7 @@ class DoctrineEntity
             $config->setAutoGenerateProxyClasses(true);
         }
         // echo __DIR__;
-        $domainRootPath = './src/core/domain/';
+        $domainRootPath = './../src/core/domain/';
 
         // I might need to force value of driver for domain folder at constructor
         // Driver Implementation
@@ -124,7 +124,7 @@ class DoctrineEntity
      * @param string $dir
      * @return self
      */
-    public function setProxyDir(string $dir = '/src/core/domain/media/proxies'): self
+    public function setProxyDir(string $dir = './../src/core/domain/media/proxies'): self
     {
         // print_r($this->_config);
         $this->_config->setProxyDir($dir);
