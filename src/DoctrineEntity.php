@@ -37,7 +37,7 @@ class DoctrineEntity
     {
         $config = new Configuration();
         // get values from config
-        include_once './config.php';
+        include_once './../config/config.php';
         $enableProdMode = (new Config)->enableProdMode;
 
         // Set defaults
