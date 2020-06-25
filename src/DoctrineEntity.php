@@ -36,9 +36,14 @@ class DoctrineEntity
     private function _onInit(string $domain): void
     {
         $config = new Configuration();
+        $enableProdMode = false;
+
+        $configFilePath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'config.php';
         // get values from config
-        include_once './../config/config.php';
-        $enableProdMode = (new Config)->enableProdMode;
+        if (file_exists($configFilePath)) {
+            include_once $configFilePath;
+            $enableProdMode = (new Config)->enableProdMode;
+        }
 
         // Set defaults
         if ($enableProdMode) {
