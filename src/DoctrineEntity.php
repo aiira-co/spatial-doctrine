@@ -16,6 +16,8 @@ class DoctrineEntity
     private Configuration $_config;
     private object $_cache;
 
+    private string $relativeDirPath;
+
     /**
      * Constructor
      *
@@ -23,6 +25,7 @@ class DoctrineEntity
      */
     public function __construct(string $domain)
     {
+        $this->relativeDirPath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
         $this->_onInit($domain);
     }
 
@@ -38,11 +41,11 @@ class DoctrineEntity
         $config = new Configuration();
         $enableProdMode = false;
 
-        $configFilePath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'config.php';
+        $configFilePath = $this->relativeDirPath . 'config' . DIRECTORY_SEPARATOR . 'config.php';
         // get values from config
         if (file_exists($configFilePath)) {
             include_once $configFilePath;
-            $enableProdMode = (new Config)->enableProdMode;
+            $enableProdMode = (new Config())->enableProdMode;
         }
 
         // Set defaults
@@ -67,7 +70,7 @@ class DoctrineEntity
             $config->setAutoGenerateProxyClasses(true);
         }
         // echo __DIR__;
-        $domainRootPath = './../src/core/domain/';
+        $domainRootPath = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'domain' . DIRECTORY_SEPARATOR;
 
         // I might need to force value of driver for domain folder at constructor
         // Driver Implementation
@@ -129,8 +132,11 @@ class DoctrineEntity
      * @param string $dir
      * @return self
      */
-    public function setProxyDir(string $dir = './../src/core/domain/media/proxies'): self
+    public function setProxyDir(?string $dir): self
     {
+        if ($dir === null) {
+            $dir = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'domain' . DIRECTORY_SEPARATOR . 'proxies';
+        }
         // print_r($this->_config);
         $this->_config->setProxyDir($dir);
         return $this;
