@@ -7,6 +7,7 @@ namespace Spatial\Entity;
 use Config;
 use Doctrine\Common\Cache\ArrayCache;
 use Doctrine\Common\Cache\MemcachedCache;
+use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\ORMException;
@@ -26,6 +27,7 @@ class DoctrineEntity
     public function __construct(string $domain)
     {
         $this->relativeDirPath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
+        $this->dbalTypes();
         $this->_onInit($domain);
     }
 
@@ -38,6 +40,7 @@ class DoctrineEntity
      */
     private function _onInit(string $domain): void
     {
+
         $config = new Configuration();
         $enableProdMode = false;
 
@@ -90,6 +93,7 @@ class DoctrineEntity
         $this->_cache = $cache;
         // return $this;
     }
+
 
     /**
      * Return Doctrine's
@@ -172,4 +176,16 @@ class DoctrineEntity
         return $this;
     }
 
+    /**
+     * Dbal Types
+     */
+    private function dbalTypes()
+    {
+        $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'];
+        if (count($dbalTypes) > 0) {
+            foreach ($dbalTypes as $types => $value) {
+                Type::addType($types, $value);
+            }
+        }
+    }
 }
