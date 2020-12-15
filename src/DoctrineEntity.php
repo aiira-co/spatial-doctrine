@@ -182,7 +182,7 @@ class DoctrineEntity
     private function dbalTypes()
     {
         $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'];
-        if (count($dbalTypes) > 0) {
+        if ($dbalTypes &&  count($dbalTypes) > 0) {
             foreach ($dbalTypes as $types => $value) {
                 Type::addType($types, $value);
             }
