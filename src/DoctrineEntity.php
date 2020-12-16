@@ -28,7 +28,7 @@ class DoctrineEntity
     {
         $this->relativeDirPath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
         $this->dbalTypes();
-        $this->_onInit($domain);
+        $this->_onInit(ucfirst($domain));
     }
 
     /**
@@ -73,7 +73,7 @@ class DoctrineEntity
             $config->setAutoGenerateProxyClasses(true);
         }
         // echo __DIR__;
-        $domainRootPath = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'domain' . DIRECTORY_SEPARATOR;
+        $domainRootPath = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'Domain' . DIRECTORY_SEPARATOR;
 
         // I might need to force value of driver for domain folder at constructor
         // Driver Implementation
@@ -86,8 +86,8 @@ class DoctrineEntity
         $config->setQueryCacheImpl($cache);
 
         // Proxies
-        $config->setProxyDir($domainRootPath . $domain . '/proxy');
-        $config->setProxyNamespace('Core\Domain\\' . ucfirst($domain));
+        $config->setProxyDir($domainRootPath . $domain . '/Proxy');
+        $config->setProxyNamespace('Core\Domain\\' . $domain);
 
         $this->_config = $config;
         $this->_cache = $cache;
@@ -139,7 +139,7 @@ class DoctrineEntity
     public function setProxyDir(?string $dir): self
     {
         if ($dir === null) {
-            $dir = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'domain' . DIRECTORY_SEPARATOR . 'proxies';
+            $dir = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'Domain' . DIRECTORY_SEPARATOR . 'Proxies';
         }
         // print_r($this->_config);
         $this->_config->setProxyDir($dir);
