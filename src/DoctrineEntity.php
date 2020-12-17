@@ -86,8 +86,8 @@ class DoctrineEntity
         $config->setQueryCacheImpl($cache);
 
         // Proxies
-        $config->setProxyDir($domainRootPath . $domain . '/Proxy');
-        $config->setProxyNamespace('Core\Domain\\' . $domain);
+        $config->setProxyDir($domainRootPath . $domain . '/Proxies');
+        $config->setProxyNamespace('Core\Domain\\' . $domain.'\\Proxies');
 
         $this->_config = $config;
         $this->_cache = $cache;
@@ -111,7 +111,7 @@ class DoctrineEntity
     /**
      * Set Development True/False
      *
-     * @param boolean $dev
+     * @param bool $dev
      * @return self
      */
     public function isDev(bool $dev = false): self
@@ -133,7 +133,7 @@ class DoctrineEntity
      * The following sections describe all the configuration options
      * available on a Doctrine\ORM\Configuration instance.
      *
-     * @param string $dir
+     * @param string|null $dir
      * @return self
      */
     public function setProxyDir(?string $dir): self
@@ -155,7 +155,7 @@ class DoctrineEntity
      * @param string $namespace
      * @return self
      */
-    public function setProxyNamespace(string $namespace = 'Core\Domain'): self
+    public function setProxyNamespace(string $namespace = 'Core\Domain\Proxies'): self
     {
         $this->_config->setProxyNamespace($namespace);
         return $this;
