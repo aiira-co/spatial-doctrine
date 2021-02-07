@@ -28,7 +28,7 @@ class DoctrineEntity
     {
         $this->relativeDirPath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
         $this->dbalTypes();
-        $this->_onInit(ucfirst($domain));
+        $this->_onInit($domain);
     }
 
     /**
@@ -86,8 +86,8 @@ class DoctrineEntity
         $config->setQueryCacheImpl($cache);
 
         // Proxies
-        $config->setProxyDir($domainRootPath . $domain . '/Proxies');
-        $config->setProxyNamespace('Core\Domain\\' . $domain.'\\Proxies');
+        $config->setProxyDir($domainRootPath . ucfirst($domain) . '/proxy');
+        $config->setProxyNamespace('Core\Domain\\' . ucfirst($domain));
 
         $this->_config = $config;
         $this->_cache = $cache;
@@ -111,7 +111,7 @@ class DoctrineEntity
     /**
      * Set Development True/False
      *
-     * @param bool $dev
+     * @param boolean $dev
      * @return self
      */
     public function isDev(bool $dev = false): self
@@ -133,13 +133,13 @@ class DoctrineEntity
      * The following sections describe all the configuration options
      * available on a Doctrine\ORM\Configuration instance.
      *
-     * @param string|null $dir
+     * @param string $dir
      * @return self
      */
     public function setProxyDir(?string $dir): self
     {
         if ($dir === null) {
-            $dir = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'Domain' . DIRECTORY_SEPARATOR . 'Proxies';
+            $dir = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'domain' . DIRECTORY_SEPARATOR . 'proxies';
         }
         // print_r($this->_config);
         $this->_config->setProxyDir($dir);
@@ -155,7 +155,7 @@ class DoctrineEntity
      * @param string $namespace
      * @return self
      */
-    public function setProxyNamespace(string $namespace = 'Core\Domain\Proxies'): self
+    public function setProxyNamespace(string $namespace = 'Core\Domain'): self
     {
         $this->_config->setProxyNamespace($namespace);
         return $this;
@@ -182,7 +182,7 @@ class DoctrineEntity
     private function dbalTypes()
     {
         $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'];
-        if ($dbalTypes &&  count($dbalTypes) > 0) {
+        if ($dbalTypes !== null && count($dbalTypes) > 0) {
             foreach ($dbalTypes as $types => $value) {
                 Type::addType($types, $value);
             }
