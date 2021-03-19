@@ -4,15 +4,15 @@
   "type": "library",
   "require": {
     "php": "^7.4 | ^8.0",
-    "doctrine/orm": "^2.7",
+    "doctrine/orm": "^2.8",
     "ramsey/uuid-doctrine": "^1.6"
   },
   "license": "MIT",
   "authors": [
     {
       "name": "Kofi Owusu-Afriyie",
-      "email": "airdesign.code@gmail.com",
-      "homepage": "https://github.com/air-Design",
+      "email": "koathecedi@gmail.com",
+      "homepage": "https://aiira.co",
       "role": "Developer"
     }
   ],
