@@ -7,6 +7,7 @@ namespace Spatial\Entity;
 use Config;
 use Doctrine\Common\Cache\ArrayCache;
 use Doctrine\Common\Cache\MemcachedCache;
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
@@ -40,7 +41,6 @@ class DoctrineEntity
      */
     private function _onInit(string $domain): void
     {
-
         $config = new Configuration();
         $enableProdMode = false;
 
@@ -99,13 +99,13 @@ class DoctrineEntity
      * Return Doctrine's
      * EntityManager based on the connection string
      *
-     * @param array $connectionOptions
+     * @param array|Connection $connection
      * @return EntityManager
      * @throws ORMException
      */
-    public function entityManager(array $connectionOptions): EntityManager
+    public function entityManager(array|Connection $connection): EntityManager
     {
-        return EntityManager::create($connectionOptions, $this->_config);
+        return EntityManager::create($connection, $this->_config);
     }
 
     /**
