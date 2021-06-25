@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Spatial\Entity;
 
 use Config;
-use Doctrine\Common\Cache\ArrayCache;
-use Doctrine\Common\Cache\MemcachedCache;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
@@ -16,7 +14,7 @@ use Doctrine\ORM\ORMException;
 class DoctrineEntity
 {
     private Configuration $_config;
-    private object $_cache;
+//    private object $_cache;
 
     private string $relativeDirPath;
 
@@ -24,6 +22,7 @@ class DoctrineEntity
      * Constructor
      *
      * @param string $domain
+     * @throws \Doctrine\DBAL\Exception
      */
     public function __construct(string $domain)
     {
@@ -63,13 +62,13 @@ class DoctrineEntity
             // $configuration = new Configuration();
             // ...
             // $configuration->setMetadataCacheImpl($metadataCache);
-            $cache = new MemcachedCache();
+//            $cache = new MemcachedCache();
             $config->setAutoGenerateProxyClasses(false);
 //            make sure to use redis
         } else {
             // set default to dev mode
 
-            $cache = new ArrayCache();
+//            $cache = new ArrayCache();
             $config->setAutoGenerateProxyClasses(true);
         }
         // echo __DIR__;
@@ -82,15 +81,15 @@ class DoctrineEntity
         $config->setMetadataDriverImpl($driverImpl);
 
         // Cache
-        $config->setMetadataCacheImpl($cache);
-        $config->setQueryCacheImpl($cache);
+//        $config->setMetadataCacheImpl($cache);
+//        $config->setQueryCacheImpl($cache);
 
         // Proxies
         $config->setProxyDir($domainRootPath . ucfirst($domain) . '/proxy');
         $config->setProxyNamespace('Core\Domain\\' . ucfirst($domain));
 
         $this->_config = $config;
-        $this->_cache = $cache;
+//        $this->_cache = $cache;
         // return $this;
     }
 
@@ -117,10 +116,10 @@ class DoctrineEntity
     public function isDev(bool $dev = false): self
     {
         if ($dev) {
-            $this->_cache = new ArrayCache;
+//            $this->_cache = new ArrayCache;
             $this->_config->setAutoGenerateProxyClasses(true);
         } else {
-            $this->_cache = new MemcachedCache();
+//            $this->_cache = new MemcachedCache();
             $this->_config->setAutoGenerateProxyClasses(false);
         }
         return $this;
@@ -133,7 +132,7 @@ class DoctrineEntity
      * The following sections describe all the configuration options
      * available on a Doctrine\ORM\Configuration instance.
      *
-     * @param string $dir
+     * @param string|null $dir
      * @return self
      */
     public function setProxyDir(?string $dir): self
@@ -178,8 +177,9 @@ class DoctrineEntity
 
     /**
      * Dbal Types
+     * @throws \Doctrine\DBAL\Exception
      */
-    private function dbalTypes()
+    private function dbalTypes(): void
     {
         $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'];
         if ($dbalTypes !== null && count($dbalTypes) > 0) {

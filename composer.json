@@ -4,7 +4,7 @@
   "type": "library",
   "require": {
     "php": "^7.4 | ^8.0",
-    "doctrine/orm": "^2.8",
+    "doctrine/orm": "^2.9",
     "ramsey/uuid-doctrine": "^1.6"
   },
   "license": "MIT",
