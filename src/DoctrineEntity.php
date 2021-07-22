@@ -9,7 +9,10 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 use Doctrine\ORM\ORMException;
+
+//use Doctrine\Common\Cache;
 
 class DoctrineEntity
 {
@@ -76,8 +79,10 @@ class DoctrineEntity
 
         // I might need to force value of driver for domain folder at constructor
         // Driver Implementation
-        $driverImpl = $config
-            ->newDefaultAnnotationDriver($domainRootPath . $domain);
+//        $driverImpl = $config
+//            ->newDefaultAnnotationDriver($domainRootPath . $domain);
+//        use attribute(meta) as default
+        $driverImpl = new AttributeDriver([$domainRootPath . $domain]);
         $config->setMetadataDriverImpl($driverImpl);
 
         // Cache
