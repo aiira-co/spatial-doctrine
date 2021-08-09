@@ -100,17 +100,40 @@ class DoctrineEntity
 
 
     /**
+     * @return \Doctrine\ORM\Configuration
+     */
+    public function getDoctrineConfig(): Configuration
+    {
+        return $this->_config;
+    }
+
+    /**
+     * @param \Doctrine\ORM\Configuration $config
+     * @return $this
+     */
+    public function setDoctrineConfig(Configuration $config): self
+    {
+        $this->_config = $config;
+        return $this;
+    }
+
+    /**
      * Return Doctrine's
      * EntityManager based on the connection string
      *
      * @param array|Connection $connection
+     * @param \Doctrine\ORM\Configuration|null $config
      * @return EntityManager
-     * @throws ORMException
+     * @throws \Doctrine\ORM\ORMException
      */
-    public function entityManager(array|Connection $connection): EntityManager
-    {
-        return EntityManager::create($connection, $this->_config);
+    public
+    function entityManager(
+        array|Connection $connection,
+        ?Configuration $config = null
+    ): EntityManager {
+        return EntityManager::create($connection, $config ?? $this->_config);
     }
+
 
     /**
      * Set Development True/False
