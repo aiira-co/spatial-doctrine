@@ -9,10 +9,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
-use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 use Doctrine\ORM\ORMException;
-
-//use Doctrine\Common\Cache;
 
 class DoctrineEntity
 {
@@ -79,10 +76,8 @@ class DoctrineEntity
 
         // I might need to force value of driver for domain folder at constructor
         // Driver Implementation
-//        $driverImpl = $config
-//            ->newDefaultAnnotationDriver($domainRootPath . $domain);
-//        use attribute(meta) as default
-        $driverImpl = new AttributeDriver([$domainRootPath . $domain]);
+        $driverImpl = $config
+            ->newDefaultAnnotationDriver($domainRootPath . $domain);
         $config->setMetadataDriverImpl($driverImpl);
 
         // Cache
@@ -98,10 +93,6 @@ class DoctrineEntity
         // return $this;
     }
 
-
-    /**
-     * @return \Doctrine\ORM\Configuration
-     */
     public function getDoctrineConfig(): Configuration
     {
         return $this->_config;
@@ -114,7 +105,6 @@ class DoctrineEntity
     public function setDoctrineConfig(Configuration $config): self
     {
         $this->_config = $config;
-        return $this;
     }
 
     /**
@@ -122,9 +112,8 @@ class DoctrineEntity
      * EntityManager based on the connection string
      *
      * @param array|Connection $connection
-     * @param \Doctrine\ORM\Configuration|null $config
      * @return EntityManager
-     * @throws \Doctrine\ORM\ORMException
+     * @throws ORMException
      */
     public
     function entityManager(
@@ -134,15 +123,16 @@ class DoctrineEntity
         return EntityManager::create($connection, $config ?? $this->_config);
     }
 
-
     /**
      * Set Development True/False
      *
      * @param boolean $dev
      * @return self
      */
-    public function isDev(bool $dev = false): self
-    {
+    public
+    function isDev(
+        bool $dev = false
+    ): self {
         if ($dev) {
 //            $this->_cache = new ArrayCache;
             $this->_config->setAutoGenerateProxyClasses(true);
@@ -153,7 +143,7 @@ class DoctrineEntity
         return $this;
     }
 
-    // Proxies Directory
+// Proxies Directory
 
     /**
      * Configuration Options
@@ -163,8 +153,10 @@ class DoctrineEntity
      * @param string|null $dir
      * @return self
      */
-    public function setProxyDir(?string $dir): self
-    {
+    public
+    function setProxyDir(
+        ?string $dir
+    ): self {
         if ($dir === null) {
             $dir = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'domain' . DIRECTORY_SEPARATOR . 'proxies';
         }
@@ -174,7 +166,7 @@ class DoctrineEntity
     }
 
 
-    // Proxy Namespace
+// Proxy Namespace
 
     /**
      * Sets the namespace to use for generated proxy classes.
@@ -182,8 +174,10 @@ class DoctrineEntity
      * @param string $namespace
      * @return self
      */
-    public function setProxyNamespace(string $namespace = 'Core\Domain'): self
-    {
+    public
+    function setProxyNamespace(
+        string $namespace = 'Core\Domain'
+    ): self {
         $this->_config->setProxyNamespace($namespace);
         return $this;
     }
@@ -197,8 +191,10 @@ class DoctrineEntity
      * @param [type] $connectionOptions
      * @return self
      */
-    public function setMetadataDriverImpl($driver): self
-    {
+    public
+    function setMetadataDriverImpl(
+        $driver
+    ): self {
         $this->_config->setMetadataDriverImpl($driver);
         return $this;
     }
@@ -207,7 +203,8 @@ class DoctrineEntity
      * Dbal Types
      * @throws \Doctrine\DBAL\Exception
      */
-    private function dbalTypes(): void
+    private
+    function dbalTypes(): void
     {
         $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'];
         if ($dbalTypes !== null && count($dbalTypes) > 0) {
