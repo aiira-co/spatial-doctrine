@@ -10,7 +10,6 @@ use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Mapping\Driver\AttributeDriver;
-use Doctrine\ORM\ORMException;
 
 //use Doctrine\Common\Cache;
 
@@ -24,10 +23,10 @@ class DoctrineEntity
     /**
      * Constructor
      *
-     * @param string $domain
+     * @param string ...$domain
      * @throws \Doctrine\DBAL\Exception
      */
-    public function __construct(string $domain)
+    public function __construct(string ...$domain)
     {
         $this->relativeDirPath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
         $this->dbalTypes();
@@ -38,10 +37,10 @@ class DoctrineEntity
      * Set default configs for
      * cache and proxy with production mode.
      *
-     * @param string $domain
+     * @param array $domain
      * @return void
      */
-    private function _onInit(string $domain): void
+    private function _onInit(array $domain): void
     {
         $config = new Configuration();
         $enableProdMode = false;
@@ -82,7 +81,12 @@ class DoctrineEntity
 //        $driverImpl = $config
 //            ->newDefaultAnnotationDriver($domainRootPath . $domain);
 //        use attribute(meta) as default
-        $driverImpl = new AttributeDriver([$domainRootPath . $domain]);
+
+        foreach ($domain as $i => $iValue) {
+            $domain[$i] = $domainRootPath . $iValue;
+        }
+
+        $driverImpl = new AttributeDriver($domain);
         $config->setMetadataDriverImpl($driverImpl);
 
         // Cache
@@ -90,8 +94,8 @@ class DoctrineEntity
 //        $config->setQueryCacheImpl($cache);
 
         // Proxies
-        $config->setProxyDir($domainRootPath . ucfirst($domain) . '/proxy');
-        $config->setProxyNamespace('Core\Domain\\' . ucfirst($domain));
+        $config->setProxyDir($domainRootPath . ucfirst($domain[0]) . '/Proxy');
+        $config->setProxyNamespace('Core\Domain\\');
 
         $this->_config = $config;
 //        $this->_cache = $cache;
