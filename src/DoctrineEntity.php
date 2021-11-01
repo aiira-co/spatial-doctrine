@@ -83,7 +83,7 @@ class DoctrineEntity
 //        use attribute(meta) as default
 
         foreach ($domain as $i => $iValue) {
-            $domain[$i] = $domainRootPath . $iValue;
+            $domain[$i] = $domainRootPath . ucfirst($iValue);
         }
 
         $driverImpl = new AttributeDriver($domain);
@@ -94,7 +94,7 @@ class DoctrineEntity
 //        $config->setQueryCacheImpl($cache);
 
         // Proxies
-        $config->setProxyDir($domainRootPath . ucfirst($domain[0]) . '/Proxy');
+        $config->setProxyDir($domain[0] . DIRECTORY_SEPARATOR . 'Proxy');
         $config->setProxyNamespace('Core\Domain\\');
 
         $this->_config = $config;
