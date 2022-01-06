@@ -9,7 +9,11 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\Mapping\Driver\AnnotationDriver;
 use Doctrine\ORM\Mapping\Driver\AttributeDriver;
+use Doctrine\ORM\Mapping\Driver\SimplifiedYamlDriver;
+use Doctrine\ORM\Mapping\Driver\XmlDriver;
+use Doctrine\Persistence\Mapping\Driver\PHPDriver;
 
 //use Doctrine\Common\Cache;
 
@@ -65,12 +69,13 @@ class DoctrineEntity
             // ...
             // $configuration->setMetadataCacheImpl($metadataCache);
 //            $cache = new MemcachedCache();
-            $config->setAutoGenerateProxyClasses(false);
+            $config->setAutoGenerateProxyClasses(DoctrineConfig['doctrine']['orm']['generate_proxy_classes'] ?? false);
 //            make sure to use redis
         } else {
             // set default to dev mode
 
 //            $cache = new ArrayCache();
+//            $config->setMetadataCache($cache);
             $config->setAutoGenerateProxyClasses(true);
         }
         // echo __DIR__;
@@ -82,11 +87,21 @@ class DoctrineEntity
 //            ->newDefaultAnnotationDriver($domainRootPath . $domain);
 //        use attribute(meta) as default
 
+        $domainPath = [];
         foreach ($domain as $i => $iValue) {
-            $domain[$i] = $domainRootPath . ucfirst($iValue);
+            $domainPath[$i] = $domainRootPath . ucfirst($iValue);
         }
 
-        $driverImpl = new AttributeDriver($domain);
+//        MetaDataDriverImplementation
+        $driverImpl = match (DoctrineConfig['doctrine']['orm']['metadata_driver_implementation'] ?? 'attribute') {
+            'xml' => new XmlDriver($domainPath),
+            'annotation' => new AnnotationDriver($domainPath[0]),
+            'yaml' => new SimplifiedYamlDriver($domainPath),
+            'php' => new PHPDriver($domainPath),
+            default => new AttributeDriver($domainPath)
+        };
+
+
         $config->setMetadataDriverImpl($driverImpl);
 
         // Cache
@@ -94,8 +109,12 @@ class DoctrineEntity
 //        $config->setQueryCacheImpl($cache);
 
         // Proxies
-        $config->setProxyDir($domain[0] . DIRECTORY_SEPARATOR . 'Proxy');
-        $config->setProxyNamespace('Core\Domain\\');
+        $proxyDir = DoctrineConfig['doctrine']['orm']['proxy_dir'] . '/' . $domain[0] ??
+            'var/cache/' . ($enableProdMode ? 'prod' : 'dev') . '/doctrine/orm/Proxies/' . $domain[0];
+        $proxyNamespace = DoctrineConfig['doctrine']['orm']['proxy_namespace'] ?? 'Proxies';
+
+        $config->setProxyDir($this->relativeDirPath . $proxyDir);
+        $config->setProxyNamespace($proxyNamespace);
 
         $this->_config = $config;
 //        $this->_cache = $cache;
