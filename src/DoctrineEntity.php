@@ -20,7 +20,7 @@ use Doctrine\Persistence\Mapping\Driver\PHPDriver;
 class DoctrineEntity
 {
     private Configuration $_config;
-//    private object $_cache;
+    //    private object $_cache;
 
     private string $relativeDirPath;
 
@@ -68,14 +68,14 @@ class DoctrineEntity
             // $configuration = new Configuration();
             // ...
             // $configuration->setMetadataCacheImpl($metadataCache);
-//            $cache = new MemcachedCache();
+            //            $cache = new MemcachedCache();
             $config->setAutoGenerateProxyClasses(DoctrineConfig['doctrine']['orm']['generate_proxy_classes'] ?? false);
-//            make sure to use redis
+            //            make sure to use redis
         } else {
             // set default to dev mode
 
-//            $cache = new ArrayCache();
-//            $config->setMetadataCache($cache);
+            //            $cache = new ArrayCache();
+            //            $config->setMetadataCache($cache);
             $config->setAutoGenerateProxyClasses(true);
         }
         // echo __DIR__;
@@ -83,16 +83,16 @@ class DoctrineEntity
 
         // I might need to force value of driver for domain folder at constructor
         // Driver Implementation
-//        $driverImpl = $config
-//            ->newDefaultAnnotationDriver($domainRootPath . $domain);
-//        use attribute(meta) as default
+        //        $driverImpl = $config
+        //            ->newDefaultAnnotationDriver($domainRootPath . $domain);
+        //        use attribute(meta) as default
 
         $domainPath = [];
         foreach ($domain as $i => $iValue) {
             $domainPath[$i] = $domainRootPath . ucfirst($iValue);
         }
 
-//        MetaDataDriverImplementation
+        //        MetaDataDriverImplementation
         $driverImpl = match (DoctrineConfig['doctrine']['orm']['metadata_driver_implementation'] ?? 'attribute') {
             'xml' => new XmlDriver($domainPath),
             'annotation' => new AnnotationDriver($domainPath[0]),
@@ -105,8 +105,8 @@ class DoctrineEntity
         $config->setMetadataDriverImpl($driverImpl);
 
         // Cache
-//        $config->setMetadataCacheImpl($cache);
-//        $config->setQueryCacheImpl($cache);
+        //        $config->setMetadataCacheImpl($cache);
+        //        $config->setQueryCacheImpl($cache);
 
         // Proxies
         $proxyDir = DoctrineConfig['doctrine']['orm']['proxy_dir'] . '/' . $domain[0] ??
@@ -116,8 +116,8 @@ class DoctrineEntity
         $config->setProxyDir($this->relativeDirPath . $proxyDir);
         $config->setProxyNamespace($proxyNamespace);
 
-        $this->_config = $config;
-//        $this->_cache = $cache;
+        $this->_config = $this->_config = $this->setOrmConfigs($config);;
+        //        $this->_cache = $cache;
         // return $this;
     }
 
@@ -167,10 +167,10 @@ class DoctrineEntity
     public function isDev(bool $dev = false): self
     {
         if ($dev) {
-//            $this->_cache = new ArrayCache;
+            //            $this->_cache = new ArrayCache;
             $this->_config->setAutoGenerateProxyClasses(true);
         } else {
-//            $this->_cache = new MemcachedCache();
+            //            $this->_cache = new MemcachedCache();
             $this->_config->setAutoGenerateProxyClasses(false);
         }
         return $this;
@@ -238,5 +238,48 @@ class DoctrineEntity
                 Type::addType($types, $value);
             }
         }
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param Configuration $doctrineConfig
+     * @return Configuration
+     */
+    private function setOrmConfigs(Configuration $doctrineConfig): Configuration
+    {
+        $ormConfigs = DoctrineConfig['doctrine']['orm'];
+        if ($ormConfigs === null || !is_array($ormConfigs)) {
+            return $doctrineConfig;
+        }
+
+        //        check for dqls - addCustomFunctions to DQL
+        if (array_key_exists('dql', $ormConfigs)) {
+            foreach ($ormConfigs['dql'] as $dqlConfig => $valueType) {
+                switch ($dqlConfig) {
+                    case 'datetime_functions':
+                        foreach ($valueType as $type => $value) {
+                            $doctrineConfig->addCustomDatetimeFunction($type, $value);
+                        }
+                        break;
+
+                    case 'numeric_functions':
+                        foreach ($valueType as $type => $value) {
+                            $doctrineConfig->addCustomNumericFunction($type, $value);
+                        }
+                        break;
+
+                    case 'string_functions':
+                        foreach ($valueType as $type => $value) {
+                            $doctrineConfig->addCustomStringFunction($type, $value);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        return $doctrineConfig;
     }
 }
