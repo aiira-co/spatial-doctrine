@@ -6,6 +6,7 @@ namespace Spatial\Entity;
 
 use Config;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
@@ -151,10 +152,16 @@ class DoctrineEntity
      */
     public
     function entityManager(
-        array|Connection $connection,
+        array|Connection $connectionParams,
         ?Configuration $config = null
     ): EntityManager {
-        return EntityManager::create($connection, $config ?? $this->_config);
+        $connection =  DriverManager::getConnection($connectionParams, $config ?? $this->_config);
+        return new EntityManager($connection, $config ?? $this->_config);
+    }
+
+    public function connection(array|Connection $connectionParams,
+    ?Configuration $config = null):Connection{
+        return  DriverManager::getConnection($connectionParams, $config ?? $this->_config);
     }
 
 

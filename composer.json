@@ -4,9 +4,11 @@
   "type": "library",
   "require": {
     "php": "^7.4 | ^8.0",
-    "doctrine/orm": "^2.9",
-    "ramsey/uuid-doctrine": "^1.7",
-    "oro/doctrine-extensions": "^2.0"
+    "doctrine/orm": "^2",
+    "ramsey/uuid-doctrine": "^2",
+    "oro/doctrine-extensions": "^2",
+    "opsway/doctrine-dbal-swoole-pgsql-driver": "^4.0",
+    "opsway/doctrine-orm-swoole": "^1.2"
   },
   "license": "MIT",
   "authors": [
