@@ -159,6 +159,9 @@ class DoctrineEntity
         return new EntityManager($connection, $config ?? $this->_config);
     }
 
+    /**
+     * 
+     */
     public function connection(array|Connection $connectionParams,
     ?Configuration $config = null):Connection{
         return  DriverManager::getConnection($connectionParams, $config ?? $this->_config);
