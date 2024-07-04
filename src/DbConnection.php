@@ -16,19 +16,20 @@ use OpsWay\Doctrine\ORM\Swoole\EntityManager;
 abstract class DbConnection
 {
     public \Closure $entityManager;
+    private string $_opsWayPostgresDriver = '\OpsWay\Doctrine\DBAL\Swoole\PgSQL\Driver';
     
-    public function __construct(string $domain, array $params)
+    public function __construct()
     {
-        $_ = $this->connect($domain, $params);
+//        $_ = $this->connect($domain, $params);
     }
 
-    private function connect(string $domain, array $params): EntityManagerInterface
+    protected function connect(string $domain, array $params): EntityManagerInterface
     {
         try {
             $doctrine = new DoctrineEntity($domain);
 
             if (
-                $params['driverClass'] === '\OpsWay\Doctrine\DBAL\Swoole\PgSQL\Driver'
+                $params['driverClass'] === $this->_opsWayPostgresDriver
             ) {
                 $pool = (new ConnectionPoolFactory())($params);
                 $doctrine->getDoctrineConfig()
@@ -38,10 +39,13 @@ abstract class DbConnection
                         ]
                     );
 
-                $scaler = new Scaler($pool, $params['tickFrequency']); // will try to free idle connect on connectionTtl overdue
+                $scaler = new Scaler(
+                    $pool,
+                    $params['tickFrequency']
+                ); // will try to free idle connect on connectionTtl overdue
             }
 
-            $this->entityManager = fn() => $doctrine->entityManager($params);
+            $this->entityManager = fn():\Doctrine\ORM\EntityManager => $doctrine->entityManager($params);
 
         } catch (Exception $e) {
             die($e->getMessage());
