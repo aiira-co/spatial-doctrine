@@ -2,14 +2,14 @@
   "name": "spatial/doctrine",
   "description": "Spatial is a MulitApi Clean Architectre Framework. It\u0000s  Doctrine ORM for maximum performances and security.",
   "type": "library",
-  "version": "4.0-alpha1",
+  "version": "4.0.0-alpha2",
   "require": {
     "php": "^7.4 | ^8.0",
-    "doctrine/orm": "^3.2.1",
+    "doctrine/orm": "^3.3.1",
     "ramsey/uuid-doctrine": "^2.1.0",
     "oro/doctrine-extensions": "^3.0-alpha4",
     "opsway/doctrine-dbal-swoole-pgsql-driver": "^4.0.0",
-    "opsway/doctrine-orm-swoole": "^2.0.0"
+    "opsway/doctrine-orm-swoole": "^2"
   },
   "license": "MIT",
   "authors": [

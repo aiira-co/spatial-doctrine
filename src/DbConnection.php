@@ -10,49 +10,54 @@ use OpsWay\Doctrine\DBAL\Swoole\PgSQL\Scaler;
 use OpsWay\Doctrine\DBAL\Swoole\PgSQL\DriverMiddleware;
 use OpsWay\Doctrine\DBAL\Swoole\PgSQL\ConnectionPoolFactory;
 
-use OpsWay\Doctrine\ORM\Swoole\EntityManager;
-    
-
 abstract class DbConnection
 {
-    public \Closure $entityManager;
-    private string $_opsWayPostgresDriver = '\OpsWay\Doctrine\DBAL\Swoole\PgSQL\Driver';
-    
+    private \Closure $entityManager;
+    private string $opsWayPostgresDriver = \OpsWay\Doctrine\DBAL\Swoole\PgSQL\Driver::class;
+
     public function __construct()
     {
-//        $_ = $this->connect($domain, $params);
+        // Initialization logic (if any) can go here.
     }
 
+    /**
+     * Establish a connection to the database and return the EntityManager.
+     *
+     * @param string $domain The domain for configuration.
+     * @param array $params The connection parameters.
+     * @return EntityManagerInterface
+     * @throws \InvalidArgumentException
+     */
     protected function connect(string $domain, array $params): EntityManagerInterface
     {
         try {
             $doctrine = new DoctrineEntity($domain);
 
-            if (
-                $params['driverClass'] === $this->_opsWayPostgresDriver
-            ) {
+            // Configure OpsWay PostgreSQL Driver
+            if (isset($params['driverClass']) && $params['driverClass'] === $this->opsWayPostgresDriver) {
                 $pool = (new ConnectionPoolFactory())($params);
-                $doctrine->getDoctrineConfig()
-                    ->setMiddlewares(
-                        [
-                            new DriverMiddleware($pool)
-                        ]
-                    );
+
+                $doctrine->getDoctrineConfig()->setMiddlewares([
+                    new DriverMiddleware($pool)
+                ]);
 
                 $scaler = new Scaler(
                     $pool,
-                    $params['tickFrequency']
-                ); // will try to free idle connect on connectionTtl overdue
+                    $params['tickFrequency'] ?? 1000 // Default to 1000ms if not set
+                );
             }
 
-            $this->entityManager = fn():\Doctrine\ORM\EntityManager => $doctrine->entityManager($params);
+            // Closure to create the EntityManager
+            $this->entityManager = function () use ($doctrine, $params): EntityManagerInterface {
+                return $doctrine->entityManager($params);
+            };
+
+            // Return the EntityManager instance
+            return ($this->entityManager)();
 
         } catch (Exception $e) {
-            die($e->getMessage());
+            // Use proper error handling or rethrow the exception
+            throw new \RuntimeException('Database connection failed: ' . $e->getMessage(), 0, $e);
         }
-
-
-        return new EntityManager($this->entityManager);
-        //        $this->emSuite = $doctrine->entityManager($connectionParams);
     }
 }
