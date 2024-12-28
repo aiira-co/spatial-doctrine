@@ -12,7 +12,7 @@ use OpsWay\Doctrine\DBAL\Swoole\PgSQL\ConnectionPoolFactory;
 
 abstract class DbConnection
 {
-    private \Closure $entityManager;
+    public \Closure $entityManager;
     private string $opsWayPostgresDriver = \OpsWay\Doctrine\DBAL\Swoole\PgSQL\Driver::class;
 
     public function __construct()

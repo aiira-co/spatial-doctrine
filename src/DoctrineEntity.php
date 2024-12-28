@@ -48,14 +48,7 @@ class DoctrineEntity
     private function _onInit(array $domain): void
     {
         $config = new Configuration();
-        $enableProdMode = false;
-
-        $configFilePath = $this->relativeDirPath . 'config' . DIRECTORY_SEPARATOR . 'config.php';
-        // get values from config
-        if (file_exists($configFilePath)) {
-            include_once $configFilePath;
-            $enableProdMode = (new Config())->enableProdMode;
-        }
+        $enableProdMode = AppConfig['enableProdMode'];
 
         // Set defaults
         if ($enableProdMode) {
@@ -244,8 +237,9 @@ class DoctrineEntity
     {
         $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'];
         if ($dbalTypes !== null && count($dbalTypes) > 0) {
-            foreach ($dbalTypes as $types => $value) {
-                Type::addType($types, $value);
+            foreach ($dbalTypes as $type => $value) {
+                if(!Type::hasType('uuid'))
+                    Type::addType($type, $value);
             }
         }
     }
