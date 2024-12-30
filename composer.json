@@ -2,7 +2,7 @@
   "name": "spatial/doctrine",
   "description": "Spatial is a MulitApi Clean Architectre Framework. It\u0000s  Doctrine ORM for maximum performances and security.",
   "type": "library",
-  "version": "4.0.0-alpha2",
+  "version": "4.0.0-alpha4",
   "require": {
     "php": "^7.4 | ^8.0",
     "doctrine/orm": "^3.3.1",
