@@ -10,6 +10,8 @@ use OpenSwoole\Core\Coroutine\Pool\ClientPool;
 use Doctrine\DBAL\Exception;
 use OpsWay\Doctrine\DBAL\Swoole\PgSQL\DriverMiddleware;
 use OpsWay\Doctrine\DBAL\Swoole\PgSQL\Scaler;
+use Spatial\Entity\Connection\EntityManagerConfig;
+use Spatial\Entity\Connection\EntityManagerFactory;
 
 abstract class DbConnection
 {
@@ -42,7 +44,7 @@ abstract class DbConnection
         // Initialize connection pool if it doesn't exist
         if (!isset(self::$connectionPool[$this->poolId])) {
             $this->connect($domain, $params);
-            self::$connectionPool[$this->poolId] = $this->initializeConnectionPool();
+            self::$connectionPool[$this->poolId] = $this->initializeConnectionPool($domain, $params);
         }
     }
 
@@ -51,16 +53,14 @@ abstract class DbConnection
      *
      * @return ClientPool
      */
-    private function initializeConnectionPool(): ClientPool
+    private function initializeConnectionPool(string $domain, array $params): ClientPool
     {
         $poolSize = 10; // Default pool size, make configurable if needed
 
         return new ClientPool(
             size: $poolSize,
-            factory: function () {
-                return ($this->entityManager)();
-            },
-            config:[]
+            factory: EntityManagerFactory::class,
+            config: new EntityManagerConfig($this->entityManager, $domain, $params)
         );
     }
 
