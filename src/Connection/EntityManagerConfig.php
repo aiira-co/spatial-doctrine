@@ -6,11 +6,12 @@ namespace Spatial\Entity\Connection;
 
 use Doctrine\ORM\EntityManagerInterface;
 use OpenSwoole\Core\Coroutine\Client\ClientConfigInterface;
+use Doctrine\ORM\EntityManagerInterface;
 
 class EntityManagerConfig implements ClientConfigInterface
 {
     public function __construct(
-        public readonly callable $entityManager,
+        public readonly \Closure $entityManager,
         public readonly string $domain = '',
         public readonly array $params = []
     ) {}
