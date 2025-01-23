@@ -12,7 +12,7 @@ class EntityManagerFactory implements ClientFactoryInterface
 {
     public static function make(ClientConfigInterface $config): EntityManagerInterface
     {
-        if(config->entityManager){
+        if($config->entityManager){
             return ($config->entityManager)();
         }
 
