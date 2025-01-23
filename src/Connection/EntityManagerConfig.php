@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Spatial\Entity\Connection;
 
-use Doctrine\ORM\EntityManagerInterface;
 use OpenSwoole\Core\Coroutine\Client\ClientConfigInterface;
-use Doctrine\ORM\EntityManagerInterface;
 
 class EntityManagerConfig implements ClientConfigInterface
 {
