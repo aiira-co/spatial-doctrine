@@ -6,7 +6,7 @@ namespace Spatial\Entity;
 
 use Doctrine\ORM\EntityManagerInterface;
 use OpsWay\Doctrine\DBAL\Swoole\PgSQL\ConnectionPoolFactory;
-use OpenSwoole\ClientPool;
+use OpenSwoole\Core\Coroutine\Pool\ClientPool;
 use Doctrine\DBAL\Exception;
 use OpsWay\Doctrine\DBAL\Swoole\PgSQL\DriverMiddleware;
 use OpsWay\Doctrine\DBAL\Swoole\PgSQL\Scaler;
@@ -60,9 +60,7 @@ abstract class DbConnection
             factory: function () {
                 return ($this->entityManager)();
             },
-            destructor: function ($connection) {
-                unset($connection); // Clean up released connections
-            }
+            config:[]
         );
     }
 
