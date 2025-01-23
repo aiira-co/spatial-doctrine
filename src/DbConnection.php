@@ -23,7 +23,7 @@ abstract class DbConnection
     /**
      * Closure for creating EntityManager instances.
      */
-    public \Closure $entityManager;
+    protected \Closure $entityManager;
 
     /**
      * PostgreSQL driver for OpsWay.
@@ -35,12 +35,13 @@ abstract class DbConnection
      */
     private string $poolId;
 
-    public function __construct(string $poolId)
+    public function __construct(string $poolId, string $domain, array $params)
     {
         $this->poolId = $poolId;
 
         // Initialize connection pool if it doesn't exist
         if (!isset(self::$connectionPool[$this->poolId])) {
+            $this->connect($domain, $params);
             self::$connectionPool[$this->poolId] = $this->initializeConnectionPool();
         }
     }
@@ -66,14 +67,14 @@ abstract class DbConnection
     }
 
     /**
-     * Establish a connection to the database and return the EntityManager.
+     * Establish a connection to the database and set the EntityManager closure.
      *
      * @param string $domain The domain for configuration.
      * @param array $params The connection parameters.
-     * @return EntityManagerInterface
-     * @throws \InvalidArgumentException
+     * @return void
+     * @throws \RuntimeException
      */
-    protected function connect(string $domain, array $params): EntityManagerInterface
+    protected function connect(string $domain, array $params): void
     {
         try {
             $doctrine = new DoctrineEntity($domain);
@@ -92,7 +93,6 @@ abstract class DbConnection
             // Closure to create EntityManager
             $this->entityManager = fn() => $doctrine->entityManager($params);
 
-            return ($this->entityManager)();
         } catch (Exception $e) {
             throw new \RuntimeException("Database connection failed for pool ID {$this->poolId}: " . $e->getMessage(), 0, $e);
         }
@@ -102,6 +102,7 @@ abstract class DbConnection
      * Acquire a connection from the pool.
      *
      * @return EntityManagerInterface
+     * @throws \RuntimeException
      */
     public function getConnection(): EntityManagerInterface
     {
@@ -121,6 +122,7 @@ abstract class DbConnection
      * Release a connection back to the pool.
      *
      * @param EntityManagerInterface $connection
+     * @return void
      */
     public function releaseConnection(EntityManagerInterface $connection): void
     {
