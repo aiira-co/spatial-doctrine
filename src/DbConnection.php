@@ -117,6 +117,14 @@ abstract class DbConnection
     }
 
     /**
+     * @return \Closure
+     */
+    public function getEntityManager(): \Closure
+    {
+        return $this->entityManager;
+    }
+
+    /**
      * Release a connection back to the pool.
      *
      * @param EntityManagerInterface $connection
