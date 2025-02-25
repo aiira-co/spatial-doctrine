@@ -57,11 +57,15 @@ abstract class DbConnection
     {
         $poolSize = 10; // Default pool size, make configurable if needed
 
-        return new ClientPool(
+        $pool = new ClientPool(
             size: $poolSize,
             factory: EntityManagerFactory::class,
             config: new EntityManagerConfig($this->entityManager, $domain, $params)
         );
+
+        $pool->fill();
+
+        return $pool;
     }
 
     /**
@@ -134,6 +138,31 @@ abstract class DbConnection
     {
         if (isset(self::$connectionPool[$this->poolId])) {
             self::$connectionPool[$this->poolId]->put($connection);
+        }
+    }
+
+    /**
+     * Close all connections in the pool.
+     *
+     * @param EntityManagerInterface $connection
+     * @return void
+     */
+    public function closeConnection(): void
+    {
+        if (isset(self::$connectionPool[$this->poolId])) {
+            self::$connectionPool[$this->poolId]->close();
+        }
+    }
+
+
+    /**
+     * Use this static function to close all pools when server is shutting down
+     * @return void
+     */
+    public static function closeAllConnection(): void
+    {
+        foreach (self::$connectionPool as $connection) {
+            $connection->close();
         }
     }
 }
