@@ -1,10 +1,10 @@
 {
   "name": "spatial/doctrine",
-  "description": "Spatial is a MulitApi Clean Architectre Framework. It\u0000s  Doctrine ORM for maximum performances and security.",
+  "description": "Doctrine ORM integration for Spatial PHP Framework with OpenSwoole PostgreSQL driver support.",
   "type": "library",
-  "version": "4.0.0-RC2",
+  "version": "4.0.0",
   "require": {
-    "php": "^7.4 | ^8.0",
+    "php": "^8.2",
     "doctrine/orm": "^3.3.1",
     "ramsey/uuid-doctrine": "^2.1.0",
     "oro/doctrine-extensions": "^3.0-alpha4",
