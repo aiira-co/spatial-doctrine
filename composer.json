@@ -2,7 +2,7 @@
   "name": "spatial/doctrine",
   "description": "Doctrine ORM integration for Spatial PHP Framework with OpenSwoole PostgreSQL driver support.",
   "type": "library",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "require": {
     "php": "^8.2",
     "doctrine/orm": "^3.3.1",

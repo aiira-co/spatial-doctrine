@@ -4,286 +4,242 @@ declare(strict_types=1);
 
 namespace Spatial\Entity;
 
-use Config;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
-use Doctrine\ORM\Mapping\Driver\AnnotationDriver;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 use Doctrine\ORM\Mapping\Driver\SimplifiedYamlDriver;
 use Doctrine\ORM\Mapping\Driver\XmlDriver;
+use Doctrine\ORM\ORMException;
+use Doctrine\ORM\Proxy\ProxyFactory;
+use Doctrine\Persistence\Mapping\Driver\MappingDriver;
 use Doctrine\Persistence\Mapping\Driver\PHPDriver;
-
-//use Doctrine\Common\Cache;
 
 class DoctrineEntity
 {
-    private Configuration $_config;
-    //    private object $_cache;
-
-    private string $relativeDirPath;
+    private Configuration $config;
+    private readonly string $rootPath;
+    private readonly string $domainRootPath;
 
     /**
-     * Constructor
-     *
-     * @param string ...$domain
+     * @param string ...$domains Domain names to configure
      * @throws \Doctrine\DBAL\Exception
      */
-    public function __construct(string ...$domain)
+    public function __construct(string ...$domains)
     {
-        $this->relativeDirPath = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
-        $this->dbalTypes();
-        $this->_onInit($domain);
+        // Cache paths
+        $this->rootPath = dirname(__DIR__, 4) . DIRECTORY_SEPARATOR;
+        $this->domainRootPath = $this->rootPath . 'src' . DIRECTORY_SEPARATOR
+            . 'core' . DIRECTORY_SEPARATOR . 'Domain' . DIRECTORY_SEPARATOR;
+
+        $this->registerDbalTypes();
+        $this->config = $this->createConfiguration($domains);
     }
 
     /**
-     * Set default configs for
-     * cache and proxy with production mode.
-     *
-     * @param array $domain
-     * @return void
-     */
-    private function _onInit(array $domain): void
-    {
-        $config = new Configuration();
-        $enableProdMode = AppConfig['enableProdMode'];
-
-        // Set defaults
-        if ($enableProdMode) {
-            // set default to prod mode
-            // change the cache to Redis
-            // declare(strict_types=1);
-            // use Doctrine\Common\Cache\RedisCache;
-            // use Doctrine\ORM\Configuration;
-
-            // $metadataCache = new RedisCache();
-            // $configuration = new Configuration();
-            // ...
-            // $configuration->setMetadataCacheImpl($metadataCache);
-            //            $cache = new MemcachedCache();
-            $config->setAutoGenerateProxyClasses(DoctrineConfig['doctrine']['orm']['generate_proxy_classes'] ?? false);
-            //            make sure to use redis
-        } else {
-            // set default to dev mode
-
-            //            $cache = new ArrayCache();
-            //            $config->setMetadataCache($cache);
-            $config->setAutoGenerateProxyClasses(true);
-        }
-        // echo __DIR__;
-        $domainRootPath = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'Domain' . DIRECTORY_SEPARATOR;
-
-        // I might need to force value of driver for domain folder at constructor
-        // Driver Implementation
-        //        $driverImpl = $config
-        //            ->newDefaultAnnotationDriver($domainRootPath . $domain);
-        //        use attribute(meta) as default
-
-        $domainPath = [];
-        foreach ($domain as $i => $iValue) {
-            $domainPath[$i] = $domainRootPath . ucfirst($iValue);
-        }
-
-        //        MetaDataDriverImplementation
-        $driverImpl = match (DoctrineConfig['doctrine']['orm']['metadata_driver_implementation'] ?? 'attribute') {
-            'xml' => new XmlDriver($domainPath),
-            'annotation' => new AnnotationDriver($domainPath[0]),
-            'yaml' => new SimplifiedYamlDriver($domainPath),
-            'php' => new PHPDriver($domainPath),
-            default => new AttributeDriver($domainPath)
-        };
-
-
-        $config->setMetadataDriverImpl($driverImpl);
-
-        // Cache
-        //        $config->setMetadataCacheImpl($cache);
-        //        $config->setQueryCacheImpl($cache);
-
-        // Proxies
-        $proxyDir = DoctrineConfig['doctrine']['orm']['proxy_dir'] . '/' . $domain[0] ??
-            'var/cache/' . ($enableProdMode ? 'prod' : 'dev') . '/doctrine/orm/Proxies/' . $domain[0];
-        $proxyNamespace = DoctrineConfig['doctrine']['orm']['proxy_namespace'] ?? 'Proxies';
-
-        $config->setProxyDir($this->relativeDirPath . $proxyDir);
-        $config->setProxyNamespace($proxyNamespace);
-
-        $this->_config = $this->_config = $this->setOrmConfigs($config);;
-        //        $this->_cache = $cache;
-        // return $this;
-    }
-
-
-    /**
-     * @return \Doctrine\ORM\Configuration
+     * Get Doctrine ORM configuration
      */
     public function getDoctrineConfig(): Configuration
     {
-        return $this->_config;
+        return $this->config;
     }
 
     /**
-     * @param \Doctrine\ORM\Configuration $config
-     * @return $this
+     * Set custom Doctrine configuration
      */
     public function setDoctrineConfig(Configuration $config): self
     {
-        $this->_config = $config;
+        $this->config = $config;
         return $this;
     }
 
     /**
-     * Return Doctrine's
-     * EntityManager based on the connection string
+     * Create EntityManager with given connection parameters
      *
-     * @param array|Connection $connection
-     * @param \Doctrine\ORM\Configuration|null $config
-     * @return EntityManager
-     * @throws \Doctrine\ORM\ORMException
+     * @param array<string, mixed>|Connection $connectionParams
+     * @throws ORMException
      */
-    public
-    function entityManager(
+    public function entityManager(
         array|Connection $connectionParams,
         ?Configuration $config = null
-    ): EntityManager {
-        $connection =  DriverManager::getConnection($connectionParams, $config ?? $this->_config);
-        return new EntityManager($connection, $config ?? $this->_config);
+    ): EntityManagerInterface {
+        $connection = $this->createConnection($connectionParams, $config);
+        return new EntityManager($connection, $config ?? $this->config);
     }
 
     /**
-     * 
-     */
-    public function connection(array|Connection $connectionParams,
-    ?Configuration $config = null):Connection{
-        return  DriverManager::getConnection($connectionParams, $config ?? $this->_config);
-    }
-
-
-    /**
-     * Set Development True/False
+     * Create database connection
      *
-     * @param boolean $dev
-     * @return self
+     * @param array<string, mixed>|Connection $connectionParams
+     */
+    public function connection(
+        array|Connection $connectionParams,
+        ?Configuration $config = null
+    ): Connection {
+        return $this->createConnection($connectionParams, $config);
+    }
+
+    /**
+     * Toggle development mode
      */
     public function isDev(bool $dev = false): self
     {
-        if ($dev) {
-            //            $this->_cache = new ArrayCache;
-            $this->_config->setAutoGenerateProxyClasses(true);
-        } else {
-            //            $this->_cache = new MemcachedCache();
-            $this->_config->setAutoGenerateProxyClasses(false);
-        }
+        $this->config->setAutoGenerateProxyClasses(
+            $dev ? ProxyFactory::AUTOGENERATE_ALWAYS : ProxyFactory::AUTOGENERATE_NEVER
+        );
         return $this;
     }
 
-    // Proxies Directory
-
     /**
-     * Configuration Options
-     * The following sections describe all the configuration options
-     * available on a Doctrine\ORM\Configuration instance.
-     *
-     * @param string|null $dir
-     * @return self
+     * Set custom proxy directory
      */
-    public function setProxyDir(?string $dir): self
+    public function setProxyDir(?string $dir = null): self
     {
-        if ($dir === null) {
-            $dir = $this->relativeDirPath . 'src' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'domain' . DIRECTORY_SEPARATOR . 'proxies';
-        }
-        // print_r($this->_config);
-        $this->_config->setProxyDir($dir);
+        $dir ??= $this->domainRootPath . 'proxies';
+        $this->config->setProxyDir($dir);
         return $this;
     }
 
-
-    // Proxy Namespace
-
     /**
-     * Sets the namespace to use for generated proxy classes.
-     *
-     * @param string $namespace
-     * @return self
+     * Set proxy namespace
      */
     public function setProxyNamespace(string $namespace = 'Core\Domain'): self
     {
-        $this->_config->setProxyNamespace($namespace);
+        $this->config->setProxyNamespace($namespace);
         return $this;
     }
 
-
     /**
-     * Sets the metadata driver implementation that is used
-     * by Doctrine to acquire the object-relational
-     * metadata for your classes
-     *
-     * @param [type] $connectionOptions
-     * @return self
+     * Set metadata driver implementation
      */
-    public function setMetadataDriverImpl($driver): self
+    public function setMetadataDriverImpl(MappingDriver $driver): self
     {
-        $this->_config->setMetadataDriverImpl($driver);
+        $this->config->setMetadataDriverImpl($driver);
         return $this;
     }
 
     /**
-     * Dbal Types
+     * Create and configure Doctrine Configuration
+     *
+     * @param array<int, string> $domains
+     */
+    private function createConfiguration(array $domains): Configuration
+    {
+        $config = new Configuration();
+
+        // Enable PHP 8.4 native lazy objects - no disk-based proxies needed
+        $config->enableNativeLazyObjects(true);
+        $config->setAutoGenerateProxyClasses(ProxyFactory::AUTOGENERATE_NEVER);
+
+        // Set metadata driver
+        $config->setMetadataDriverImpl($this->createMetadataDriver($domains));
+
+        // Configure proxy settings
+        $this->configureProxies($config, $domains[0] ?? 'default');
+
+        // Add custom DQL functions
+        $this->registerCustomDqlFunctions($config);
+
+        return $config;
+    }
+
+    /**
+     * Create metadata driver based on configuration
+     *
+     * @param array<int, string> $domains
+     */
+    private function createMetadataDriver(array $domains): MappingDriver
+    {
+        $domainPaths = array_map(
+            fn(string $domain) => $this->domainRootPath . ucfirst($domain),
+            $domains
+        );
+
+        $driverType = DoctrineConfig['doctrine']['orm']['metadata_driver_implementation'] ?? 'attribute';
+
+        return match ($driverType) {
+            'xml' => new XmlDriver($domainPaths),
+            'yaml' => new SimplifiedYamlDriver($domainPaths),
+            'php' => new PHPDriver($domainPaths),
+            default => new AttributeDriver($domainPaths)
+        };
+    }
+
+    /**
+     * Configure proxy directory and namespace
+     */
+    private function configureProxies(Configuration $config, string $domain): void
+    {
+        $enableProdMode = AppConfig['enableProdMode'] ?? true;
+
+        $proxyDir = DoctrineConfig['doctrine']['orm']['proxy_dir'] ??
+            'var/cache/' . ($enableProdMode ? 'prod' : 'dev') . '/doctrine/orm/Proxies';
+
+        $proxyNamespace = DoctrineConfig['doctrine']['orm']['proxy_namespace'] ?? 'Proxies';
+
+        $config->setProxyDir($this->rootPath . $proxyDir . '/' . $domain);
+        $config->setProxyNamespace($proxyNamespace);
+    }
+
+    /**
+     * Register custom DBAL types
+     *
      * @throws \Doctrine\DBAL\Exception
      */
-    private function dbalTypes(): void
+    private function registerDbalTypes(): void
     {
-        $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'];
-        if ($dbalTypes !== null && count($dbalTypes) > 0) {
-            foreach ($dbalTypes as $type => $value) {
-                if(!Type::hasType('uuid'))
-                    Type::addType($type, $value);
+        $dbalTypes = DoctrineConfig['doctrine']['dbal']['types'] ?? [];
+
+        foreach ($dbalTypes as $typeName => $typeClass) {
+            if (!Type::hasType($typeName)) {
+                Type::addType($typeName, $typeClass);
             }
         }
     }
 
     /**
-     * Undocumented function
-     *
-     * @param Configuration $doctrineConfig
-     * @return Configuration
+     * Register custom DQL functions
      */
-    private function setOrmConfigs(Configuration $doctrineConfig): Configuration
+    private function registerCustomDqlFunctions(Configuration $config): void
     {
-        $ormConfigs = DoctrineConfig['doctrine']['orm'];
-        if ($ormConfigs === null || !is_array($ormConfigs)) {
-            return $doctrineConfig;
+        $dqlConfig = DoctrineConfig['doctrine']['orm']['dql'] ?? [];
+
+        if (empty($dqlConfig)) {
+            return;
         }
 
-        //        check for dqls - addCustomFunctions to DQL
-        if (array_key_exists('dql', $ormConfigs)) {
-            foreach ($ormConfigs['dql'] as $dqlConfig => $valueType) {
-                switch ($dqlConfig) {
-                    case 'datetime_functions':
-                        foreach ($valueType as $type => $value) {
-                            $doctrineConfig->addCustomDatetimeFunction($type, $value);
-                        }
-                        break;
-
-                    case 'numeric_functions':
-                        foreach ($valueType as $type => $value) {
-                            $doctrineConfig->addCustomNumericFunction($type, $value);
-                        }
-                        break;
-
-                    case 'string_functions':
-                        foreach ($valueType as $type => $value) {
-                            $doctrineConfig->addCustomStringFunction($type, $value);
-                        }
-                        break;
-                    default:
-                        break;
-                }
-            }
+        // Datetime functions
+        foreach ($dqlConfig['datetime_functions'] ?? [] as $name => $class) {
+            $config->addCustomDatetimeFunction($name, $class);
         }
 
-        return $doctrineConfig;
+        // Numeric functions
+        foreach ($dqlConfig['numeric_functions'] ?? [] as $name => $class) {
+            $config->addCustomNumericFunction($name, $class);
+        }
+
+        // String functions
+        foreach ($dqlConfig['string_functions'] ?? [] as $name => $class) {
+            $config->addCustomStringFunction($name, $class);
+        }
+    }
+
+    /**
+     * Create database connection from parameters
+     *
+     * @param array<string, mixed>|Connection $connectionParams
+     */
+    private function createConnection(
+        array|Connection $connectionParams,
+        ?Configuration $config = null
+    ): Connection {
+        if ($connectionParams instanceof Connection) {
+            return $connectionParams;
+        }
+
+        return DriverManager::getConnection($connectionParams, $config ?? $this->config);
     }
 }
