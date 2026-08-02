@@ -21,22 +21,60 @@ declare(strict_types=1);
 namespace OpenSwoole {
 
     /**
-     * Reports "not inside a coroutine", which is the console-command and
-     * queue-consumer path: DbConnection leases from the pool and the caller
-     * releases. The coroutine-scoped path needs real coroutines and is covered
-     * by tests/coroutine-scope-test.php, which runs inside a container.
+     * Stands in for the scheduler so the pooling logic can be exercised on a
+     * host with no OpenSwoole extension. Coroutines are emulated rather than
+     * scheduled: `$cid` says which one is running, each gets its own context,
+     * and `defer` callbacks are held until it is ended explicitly. That is
+     * enough for DbConnection, which only asks which coroutine it is in and
+     * for somewhere to hang cleanup.
+     *
+     * Real coroutines are covered by tests/coroutine-scope-test.php, which
+     * runs in a container. Setting `$cid` to -1 gives the console-command and
+     * queue-consumer path.
      */
     class Coroutine
     {
+        public static int $cid = -1;
+
+        /** @var array<int, \ArrayObject<string, mixed>> */
+        public static array $contexts = [];
+
+        /** @var array<int, list<callable>> */
+        public static array $defers = [];
+
         public static function getCid(): int
         {
-            return -1;
+            return self::$cid;
         }
 
         public static function getContext(): ?object
         {
-            return null;
+            if (self::$cid <= 0) {
+                return null;
+            }
+
+            return self::$contexts[self::$cid] ??= new \ArrayObject();
         }
+
+        public static function reset(): void
+        {
+            self::$cid      = -1;
+            self::$contexts = [];
+            self::$defers   = [];
+        }
+    }
+}
+
+namespace {
+    function defer(callable $callback): void
+    {
+        $cid = OpenSwoole\Coroutine::$cid;
+
+        if ($cid <= 0) {
+            throw new \RuntimeException('defer() outside a coroutine');
+        }
+
+        OpenSwoole\Coroutine::$defers[$cid][] = $callback;
     }
 }
 
@@ -246,6 +284,7 @@ namespace {
     require __DIR__ . '/../src/DbConnection.php';
 
     use Doctrine\ORM\EntityManagerInterface;
+    use OpenSwoole\Coroutine;
     use Spatial\Entity\DbConnection;
     use Spatial\Entity\Exception\PoolExhaustedException;
     use Spatial\Entity\Pool\PoolStats;
@@ -287,27 +326,75 @@ namespace {
         printf("%s  %s%s\n", $ok ? 'ok  ' : 'FAIL', $label, $ok || $detail === '' ? '' : "  ({$detail})");
     }
 
+    /** Run $work as coroutine $cid, without ending it. */
+    function asCoroutine(int $cid, callable $work): mixed
+    {
+        $previous = Coroutine::$cid;
+        Coroutine::$cid = $cid;
+
+        try {
+            return $work();
+        } finally {
+            Coroutine::$cid = $previous;
+        }
+    }
+
+    /** End coroutine $cid, running its defer hooks as OpenSwoole would. */
+    function endCoroutine(int $cid): void
+    {
+        asCoroutine($cid, static function () use ($cid): void {
+            foreach (array_reverse(Coroutine::$defers[$cid] ?? []) as $hook) {
+                $hook();
+            }
+        });
+
+        unset(Coroutine::$defers[$cid], Coroutine::$contexts[$cid]);
+    }
+
+    /** Run $work in a coroutine of its own, start to finish. */
+    function coroutine(callable $work): mixed
+    {
+        static $next = 0;
+        $cid = ++$next;
+
+        try {
+            return asCoroutine($cid, $work);
+        } finally {
+            endCoroutine($cid);
+        }
+    }
+
     /**
      * How many leases the pool can hand out simultaneously right now.
      * This is the property that a slot leak destroys.
+     *
+     * One coroutine per lease, because a checkout is scoped to its coroutine:
+     * asking twice in the same one returns the same EntityManager and would
+     * measure nothing. The coroutines are left open until every lease has been
+     * attempted, then ended so their slots go back.
      */
     function concurrentCapacity(TestDb $db): int
     {
-        $held = [];
+        static $next = 1000;
+        $cids = [];
 
         while (true) {
+            $cid = ++$next;
+
             try {
-                $held[] = $db->getConnection();
+                asCoroutine($cid, static fn() => $db->getConnection());
             } catch (PoolExhaustedException) {
                 break;
             }
+
+            $cids[] = $cid;
         }
 
-        foreach ($held as $em) {
-            $db->releaseConnection($em);
+        foreach ($cids as $cid) {
+            endCoroutine($cid);
         }
 
-        return count($held);
+        return count($cids);
     }
 
     function freshDb(int $size, callable $maker, float $timeout = 0.01): TestDb
@@ -337,10 +424,22 @@ namespace {
 
     echo "\n== 3. Healthy lease round-trip ==\n";
     $db = freshDb(2, fn() => new FakeEntityManager());
-    $em = $db->getConnection();
-    check('checkout returns a usable EntityManager', $em->isOpen());
-    $db->releaseConnection($em);
-    check('identity map cleared on release', $em->clears === 1, 'clears=' . $em->clears);
+    $em = coroutine(static function () use ($db) {
+        $em = $db->getConnection();
+        check('checkout returns a usable EntityManager', $em->isOpen());
+        check(
+            'asking again in the same coroutine reuses the checkout',
+            $db->getConnection() === $em
+        );
+        $db->releaseConnection($em);
+        check('identity map cleared on release', $em->clears === 1, 'clears=' . $em->clears);
+        check(
+            'the slot is still held until the coroutine ends',
+            TestDb::pool('test_pool')->available() === 0
+        );
+
+        return $em;
+    });
     check('slot returned to the pool', TestDb::pool('test_pool')->available() === 1);
     check('no in-flight leases', PoolStats::inUse('test_pool') === 0);
     check('can still serve 2 concurrent leases', concurrentCapacity($db) === 2);
@@ -353,8 +452,9 @@ namespace {
     // the pool can still satisfy.
     $db = freshDb(3, fn() => new FakeEntityManager(open: false));
     for ($i = 1; $i <= 20; $i++) {
-        $leased = $db->getConnection();
-        $db->releaseConnection($leased);
+        coroutine(static function () use ($db): void {
+            $db->releaseConnection($db->getConnection());
+        });
     }
     check('no leaked leases', PoolStats::inUse('test_pool') === 0);
     check(
@@ -384,10 +484,13 @@ namespace {
 
     echo "\n== 5. Exhaustion throws a 503 instead of blocking forever ==\n";
     $db = freshDb(2, fn() => new FakeEntityManager());
-    $held = [$db->getConnection(), $db->getConnection()];
+    $holders = [5001, 5002];
+    foreach ($holders as $cid) {
+        asCoroutine($cid, static fn() => $db->getConnection());
+    }
     $threw = null;
     try {
-        $db->getConnection();
+        coroutine(static fn() => $db->getConnection());
     } catch (PoolExhaustedException $e) {
         $threw = $e;
     }
@@ -399,41 +502,65 @@ namespace {
         'message carries no credentials or host',
         $threw !== null && !str_contains($threw->getMessage(), 'password')
     );
-    foreach ($held as $h) {
-        $db->releaseConnection($h);
+    foreach ($holders as $cid) {
+        endCoroutine($cid);
     }
+    check('slots come back when the holders end', concurrentCapacity($db) === 2);
 
     echo "\n== 6. Abandoned transaction is rolled back before reuse ==\n";
     $db = freshDb(1, fn() => new FakeEntityManager());
-    $em = $db->getConnection();
-    $em->getConnection()->inTransaction = true;
-    $db->releaseConnection($em);
+    $em = coroutine(static function () use ($db) {
+        $em = $db->getConnection();
+        $em->getConnection()->inTransaction = true;
+
+        return $em;
+    });
     check('transaction rolled back', $em->getConnection()->rollBacks === 1);
     check('transaction no longer active', !$em->getConnection()->isTransactionActive());
     check('rollback counted', PoolStats::snapshot()['test_pool']['rolledBack'] === 1);
 
     echo "\n== 7. A failing clear() replaces the slot rather than poisoning it ==\n";
     $db = freshDb(2, fn() => new FakeEntityManager(clearThrows: true));
-    $em = $db->getConnection();
-    $db->releaseConnection($em);
-    check('failure recorded', PoolStats::snapshot()['test_pool']['clearFailed'] === 1);
+    coroutine(static function () use ($db): void {
+        $db->releaseConnection($db->getConnection());
+    });
+    check('failure recorded', PoolStats::snapshot()['test_pool']['clearFailed'] > 0);
     check('pool capacity preserved', concurrentCapacity($db) === 2);
 
-    echo "\n== 8. withEntityManager() releases even when the callback throws ==\n";
+    echo "\n== 8. A handler that throws still gives its slot back ==\n";
     $db = freshDb(1, fn() => new FakeEntityManager());
     try {
-        $db->withEntityManager(function (): never {
-            throw new RuntimeException('handler blew up');
+        coroutine(static function () use ($db): never {
+            $db->withEntityManager(function (): never {
+                throw new RuntimeException('handler blew up');
+            });
         });
     } catch (RuntimeException) {
-        // expected
+        // As the error-handling middleware would.
     }
     check('lease returned after an exception', PoolStats::inUse('test_pool') === 0);
     check('slot available again', TestDb::pool('test_pool')->available() === 1);
-    // and the pool is still usable
-    $again = $db->getConnection();
-    check('pool still serves requests', $again->isOpen());
-    $db->releaseConnection($again);
+    check(
+        'pool still serves requests',
+        coroutine(static fn() => $db->getConnection()->isOpen())
+    );
+
+    echo "\n== 8b. Outside a coroutine the pool is bypassed, not misused ==\n";
+    // Console commands and queue consumers have no coroutine. ClientPool leases
+    // through a Channel, which OpenSwoole refuses outside one — reaching for it
+    // killed the worker during onWorkerStop with "API must be called in the
+    // coroutine". Without coroutines there is nothing to interleave, so one
+    // EntityManager for the process is the same bound a pool of one would give.
+    $db = freshDb(4, fn() => new FakeEntityManager());
+    Coroutine::$cid = -1;
+    $first = $db->getConnection();
+    check('a checkout succeeds with no coroutine', $first->isOpen());
+    check('the same one comes back on every call', $db->getConnection() === $first);
+    check('no pool slot was taken', TestDb::pool('test_pool')->available() === 0);
+    check('nothing counted as leased', PoolStats::inUse('test_pool') === 0);
+    $db->releaseConnection($first);
+    check('release still resets it', $first->clears === 1, 'clears=' . $first->clears);
+    check('and it stays usable afterwards', $db->getConnection()->isOpen());
 
     echo "\n== 9. warmup() populates the pool (called from onWorkerStart) ==\n";
     $db = freshDb(5, fn() => new FakeEntityManager());

@@ -78,6 +78,13 @@ abstract class DbConnection
     /** @var array<string, Scaler> Downscalers, one per pool. */
     private static array $scaler = [];
 
+    /**
+     * One EntityManager per pool for callers with no coroutine to scope to.
+     *
+     * @var array<string, EntityManagerInterface>
+     */
+    private static array $standalone = [];
+
     /** @var array<string, \Spatial\Entity\Driver\PgSQL\ConnectionPoolInterface> Raw connection pools, one per pool. */
     private static array $driverPool = [];
 
@@ -179,10 +186,12 @@ abstract class DbConnection
      * not four, and sees one identity map rather than four.
      *
      * Outside a coroutine — console commands, queue consumers, migrations —
-     * there is no `defer` to hang the release on, so the old contract stands:
-     * the caller leases from the pool and must call
-     * {@see releaseConnection()}. Handing out an unpooled EntityManager there
-     * instead would let a consumer loop open connections without limit.
+     * the pool is bypassed entirely and one EntityManager is kept for the
+     * process. It cannot be used there: ClientPool leases through a Channel,
+     * which OpenSwoole only allows inside a coroutine, so reaching for it threw
+     * "API must be called in the coroutine". Nor is it needed, because without
+     * coroutines there is nothing to interleave — a single EntityManager is
+     * already the bound a pool of one would give.
      *
      * @throws PoolExhaustedException When no slot frees up in time.
      */
@@ -191,7 +200,13 @@ abstract class DbConnection
         $context = Co::getCid() > 0 ? Co::getContext() : null;
 
         if ($context === null) {
-            return $this->lease();
+            $standalone = self::$standalone[$this->poolId] ?? null;
+
+            if ($standalone instanceof EntityManagerInterface && $standalone->isOpen()) {
+                return $standalone;
+            }
+
+            return self::$standalone[$this->poolId] = ($this->entityManager)();
         }
 
         $key  = self::CONTEXT_KEY . $this->poolId;
@@ -306,10 +321,8 @@ abstract class DbConnection
      * that returns the slot: the coroutine's `defer` hook does that, so a
      * handler that never reaches its release call no longer strands a slot.
      *
-     * Within a coroutine this rolls back any abandoned transaction and clears
-     * the identity map, leaving the EntityManager usable for the rest of the
-     * request. Outside a coroutine the caller owns the EntityManager outright,
-     * so it is returned to the pool here as before.
+     * Either way this rolls back any abandoned transaction and clears the
+     * identity map, leaving the EntityManager usable for the next caller.
      */
     public function releaseConnection(EntityManagerInterface $connection): void
     {
@@ -318,9 +331,19 @@ abstract class DbConnection
         }
 
         $context = Co::getCid() > 0 ? Co::getContext() : null;
-        $key     = self::CONTEXT_KEY . $this->poolId;
 
-        if ($context !== null && ($context[$key] ?? null) === $connection) {
+        if ($context === null) {
+            // No coroutine, so this came from the per-process EntityManager and
+            // there is no pool slot to give back. Returning it would push to a
+            // Channel, which is illegal here.
+            $this->reset($connection);
+
+            return;
+        }
+
+        $key = self::CONTEXT_KEY . $this->poolId;
+
+        if (($context[$key] ?? null) === $connection) {
             // Still the coroutine's own EntityManager. Reset it, but leave the
             // slot held until the coroutine ends — releasing it here would let
             // the same request keep using an EntityManager another coroutine
@@ -414,8 +437,15 @@ abstract class DbConnection
      */
     public static function closeAllConnection(): void
     {
-        foreach (array_keys(self::$connectionPool) as $poolId) {
-            self::drain($poolId);
+        // Draining pops from a Channel, which OpenSwoole only permits inside a
+        // coroutine, and onWorkerStop — the one place this is meant to be
+        // called from — does not run in one. Called bare it raised "API must be
+        // called in the coroutine" and killed the worker mid-shutdown, so the
+        // pools were never drained and the timers below never stopped.
+        if (Co::getCid() > 0) {
+            self::drainAll();
+        } else {
+            Co\run(static fn() => self::drainAll());
         }
 
         // Stop the downscale timers before dropping the raw connections they
@@ -429,6 +459,14 @@ abstract class DbConnection
             $pool->close();
         }
         self::$driverPool = [];
+    }
+
+    /** Drain every pool. Must run inside a coroutine. */
+    private static function drainAll(): void
+    {
+        foreach (array_keys(self::$connectionPool) as $poolId) {
+            self::drain($poolId);
+        }
     }
 
     /**
