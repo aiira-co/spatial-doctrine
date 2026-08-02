@@ -3,6 +3,33 @@
 A Doctrine DBAL driver that talks to PostgreSQL through OpenSwoole's coroutine
 client, so a query suspends the coroutine instead of blocking the worker.
 
+## Do not enable this on OpenSwoole 26.2
+
+It is complete and its own tests pass, but the OpenSwoole client underneath it
+cannot support a connection pool, so enabling it will crash workers under load.
+
+A connection may only ever be used by the coroutine that used it first. Hand it
+to a second coroutine — which is the entire purpose of a pool — and its epoll
+registration fails with `ReactorEpoll::add(): failed to add events ... File
+exists`, after which the process segfaults. Measured on OpenSwoole 26.2.0 with
+plain `OpenSwoole\Coroutine\PostgreSQL` and no Doctrine or pool code in the
+path, so this is the client, not this driver:
+
+| Pattern                                   | Result           |
+| ----------------------------------------- | ---------------- |
+| One connection per coroutine, no handoff  | 8242 q/s, 0 errors |
+| Connections shared between coroutines     | segfault (139)   |
+| `pdo_pgsql`, for reference                | 2400 q/s         |
+
+The upside is real — roughly 3.4x `pdo_pgsql`, without blocking the worker — so
+this is worth revisiting when upstream fixes connection reuse. Until then the
+only safe shape would be one connection per coroutine with no pool at all,
+which makes the connection count track in-flight requests rather than a budget,
+and that is the opposite of what these services need.
+
+Services should stay on `pdo_pgsql`, accept that concurrency is `worker_num`,
+and size `poolSize` for what a worker can actually hold at once.
+
 ## Why this exists
 
 OpenSwoole publishes no PDO PostgreSQL coroutine hook — there is no

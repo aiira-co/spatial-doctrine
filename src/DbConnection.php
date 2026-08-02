@@ -131,7 +131,13 @@ abstract class DbConnection
         try {
             $doctrine = new DoctrineEntity($domain);
 
-            if (in_array($params['driverClass'] ?? null, self::POOLED_PG_DRIVERS, true)) {
+            // Leading backslash trimmed because ::class never carries one but
+            // configs conventionally write \Fully\Qualified\Name. Comparing the
+            // two verbatim quietly skipped the middleware, and the driver then
+            // failed every request with "Connection pool should be initialized".
+            $driverClass = ltrim((string)($params['driverClass'] ?? ''), '\\');
+
+            if ($driverClass !== '' && in_array($driverClass, self::POOLED_PG_DRIVERS, true)) {
                 // Reuse the pool across instances of the same subclass. Built
                 // per instance, a second SocialDB would stand up a second set
                 // of raw connections that nothing ever drained.
