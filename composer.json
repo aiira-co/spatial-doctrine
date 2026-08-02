@@ -7,8 +7,6 @@
     "doctrine/orm": "^3.3.1",
     "ramsey/uuid-doctrine": "^2.1.0",
     "oro/doctrine-extensions": "^3.0-alpha4",
-    "opsway/doctrine-dbal-swoole-pgsql-driver": "^4.0.0",
-    "opsway/doctrine-orm-swoole": "^2",
     "openswoole/core": "^22.1 || ^26.0",
     "spatial/core": "^4.2"
   },
@@ -30,6 +28,8 @@
     "openswoole/ide-helper": "^4.11"
   },
   "scripts": {
-    "test": "php tests/pool-lease-test.php"
+    "test": "php tests/pool-lease-test.php",
+    "test:coroutine": "php tests/coroutine-scope-test.php",
+    "test:driver": "php tests/driver-conformance.php"
   }
 }

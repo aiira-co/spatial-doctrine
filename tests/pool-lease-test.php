@@ -18,6 +18,28 @@ declare(strict_types=1);
 
 /* ---------------------------------------------------------------- stubs */
 
+namespace OpenSwoole {
+
+    /**
+     * Reports "not inside a coroutine", which is the console-command and
+     * queue-consumer path: DbConnection leases from the pool and the caller
+     * releases. The coroutine-scoped path needs real coroutines and is covered
+     * by tests/coroutine-scope-test.php, which runs inside a container.
+     */
+    class Coroutine
+    {
+        public static function getCid(): int
+        {
+            return -1;
+        }
+
+        public static function getContext(): ?object
+        {
+            return null;
+        }
+    }
+}
+
 namespace OpenSwoole\Core\Coroutine\Client {
     interface ClientConfigInterface
     {

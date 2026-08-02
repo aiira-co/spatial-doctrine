@@ -7,23 +7,37 @@ namespace Spatial\Entity;
 use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
 use OpenSwoole\Core\Coroutine\Pool\ClientPool;
-use OpsWay\Doctrine\DBAL\Swoole\PgSQL\ConnectionPoolFactory;
-use OpsWay\Doctrine\DBAL\Swoole\PgSQL\DriverMiddleware;
-use OpsWay\Doctrine\DBAL\Swoole\PgSQL\Scaler;
+use OpenSwoole\Coroutine as Co;
 use Spatial\Entity\Connection\EntityManagerConfig;
 use Spatial\Entity\Connection\EntityManagerFactory;
+use Spatial\Entity\Driver\PgSQL\ConnectionPoolFactory;
+use Spatial\Entity\Driver\PgSQL\Driver as SpatialPgDriver;
+use Spatial\Entity\Driver\PgSQL\DriverMiddleware;
+use Spatial\Entity\Driver\PgSQL\Scaler;
 use Spatial\Entity\Exception\PoolExhaustedException;
 use Spatial\Entity\Pool\PoolConfig;
 use Spatial\Entity\Pool\PoolStats;
 use Throwable;
 
+use function defer;
+
 /**
  * Worker-scoped pool of Doctrine EntityManagers, keyed by pool ID.
  *
- * Lease discipline: every {@see getConnection()} must be paired with exactly
- * one {@see releaseConnection()}. Prefer {@see withEntityManager()}, which
- * pairs them for you — an unpaired checkout permanently removes a slot from
- * the pool, and enough of them will starve the worker.
+ * A checkout is scoped to the coroutine that made it. The first
+ * {@see getConnection()} in a coroutine leases an EntityManager and registers
+ * a `defer` hook; every later call in the same coroutine gets that same
+ * EntityManager back, and it returns to the pool when the coroutine ends —
+ * which under the HTTP server means when the request finishes, whether it
+ * returned early, threw, or completed.
+ *
+ * This replaces manual lease discipline. Pairing every checkout with a
+ * {@see releaseConnection()} was unenforceable in practice: across the five
+ * services, 652 handlers take an EntityManager and one wraps it in
+ * try/finally, so any early return or exception used to strand a pool slot
+ * permanently and eight of them starved the worker. {@see releaseConnection()}
+ * is still accepted and still resets the EntityManager, but it is no longer
+ * load-bearing.
  */
 abstract class DbConnection
 {
@@ -43,7 +57,29 @@ abstract class DbConnection
 
     private string $poolId;
 
-    private string $opsWayPostgresDriver = \OpsWay\Doctrine\DBAL\Swoole\PgSQL\Driver::class;
+    /**
+     * Coroutine-scoped checkouts, keyed by pool ID within the coroutine's
+     * context. Prefixed so it cannot collide with anything else stored there.
+     */
+    private const CONTEXT_KEY = 'spatial.entity.em.';
+
+    /**
+     * Driver classes that pool their own raw connections coroutine-side and so
+     * need the pooling middleware installed. The OpsWay class is still
+     * recognised for configs that predate the fork.
+     *
+     * @var list<string>
+     */
+    private const POOLED_PG_DRIVERS = [
+        SpatialPgDriver::class,
+        'OpsWay\Doctrine\DBAL\Swoole\PgSQL\Driver',
+    ];
+
+    /** @var array<string, Scaler> Downscalers, one per pool. */
+    private static array $scaler = [];
+
+    /** @var array<string, \Spatial\Entity\Driver\PgSQL\ConnectionPoolInterface> Raw connection pools, one per pool. */
+    private static array $driverPool = [];
 
     /**
      * @param array<string, mixed> $params A `doctrine.dbal.connections.*` block.
@@ -95,14 +131,27 @@ abstract class DbConnection
         try {
             $doctrine = new DoctrineEntity($domain);
 
-            if (isset($params['driverClass']) && $params['driverClass'] === $this->opsWayPostgresDriver) {
-                $pool = (new ConnectionPoolFactory())($params);
+            if (in_array($params['driverClass'] ?? null, self::POOLED_PG_DRIVERS, true)) {
+                // Reuse the pool across instances of the same subclass. Built
+                // per instance, a second SocialDB would stand up a second set
+                // of raw connections that nothing ever drained.
+                $pool = self::$driverPool[$this->poolId] ??= (new ConnectionPoolFactory())(
+                    $params + ['poolId' => $this->poolId]
+                );
 
                 $doctrine->getDoctrineConfig()->setMiddlewares([
                     new DriverMiddleware($pool)
                 ]);
 
-                new Scaler($pool, $params['tickFrequency'] ?? 1000);
+                // Built here but deliberately not started: run() registers a
+                // Timer, and this constructor runs in the master process before
+                // the workers fork. Creating the event loop that early is what
+                // made Process::signal break Server::start(). {@see warmup()}
+                // starts it from onWorkerStart instead.
+                self::$scaler[$this->poolId] ??= new Scaler(
+                    $pool,
+                    (int)($params['tickFrequency'] ?? 1000)
+                );
             }
 
             $this->entityManager = fn(): EntityManagerInterface => $doctrine->entityManager($params);
@@ -116,20 +165,65 @@ abstract class DbConnection
     }
 
     /**
-     * Lease an EntityManager from the pool.
+     * Get this coroutine's EntityManager, leasing one if it has none yet.
      *
-     * Waits at most `connectionDelay` seconds for a free slot, then throws
-     * rather than blocking forever. A slot holding an unusable EntityManager
-     * is swapped for a fresh one instead of being handed out or dropped.
+     * The first call in a coroutine takes a slot from the pool and arranges
+     * for it to be returned when the coroutine ends. Repeat calls return the
+     * same EntityManager, so a request that asks four times holds one slot,
+     * not four, and sees one identity map rather than four.
+     *
+     * Outside a coroutine — console commands, queue consumers, migrations —
+     * there is no `defer` to hang the release on, so the old contract stands:
+     * the caller leases from the pool and must call
+     * {@see releaseConnection()}. Handing out an unpooled EntityManager there
+     * instead would let a consumer loop open connections without limit.
      *
      * @throws PoolExhaustedException When no slot frees up in time.
      */
     public function getConnection(): EntityManagerInterface
     {
+        $context = Co::getCid() > 0 ? Co::getContext() : null;
+
+        if ($context === null) {
+            return $this->lease();
+        }
+
+        $key  = self::CONTEXT_KEY . $this->poolId;
+        $held = $context[$key] ?? null;
+
+        if ($held instanceof EntityManagerInterface) {
+            if ($held->isOpen()) {
+                return $held;
+            }
+
+            // The slot is already ours, so replace the EntityManager in place
+            // rather than taking a second one.
+            $this->discard($held);
+            PoolStats::increment($this->poolId, 'replaced');
+
+            return $context[$key] = ($this->entityManager)();
+        }
+
+        $entityManager = $this->lease();
+        $context[$key] = $entityManager;
+
+        defer(fn() => $this->endCoroutineScope($key));
+
+        return $entityManager;
+    }
+
+    /**
+     * Take one EntityManager out of the pool, waiting up to the configured
+     * checkout timeout.
+     *
+     * @throws PoolExhaustedException
+     */
+    private function lease(): EntityManagerInterface
+    {
         $pool = self::$connectionPool[$this->poolId]
             ?? throw new \RuntimeException("Connection pool {$this->poolId} is not initialized.");
 
-        $config = self::$poolConfig[$this->poolId];
+        $config        = self::$poolConfig[$this->poolId];
         $entityManager = $pool->get($config->checkoutTimeout);
 
         if (!$entityManager instanceof EntityManagerInterface) {
@@ -158,7 +252,30 @@ abstract class DbConnection
     }
 
     /**
-     * Run $work with a leased EntityManager and always return it to the pool.
+     * Return this coroutine's EntityManager to the pool. Runs from `defer`, so
+     * it happens however the coroutine ended.
+     */
+    private function endCoroutineScope(string $key): void
+    {
+        $context = Co::getCid() > 0 ? Co::getContext() : null;
+
+        if ($context === null) {
+            return;
+        }
+
+        $entityManager = $context[$key] ?? null;
+        unset($context[$key]);
+
+        if ($entityManager instanceof EntityManagerInterface) {
+            $this->returnToPool($entityManager);
+        }
+    }
+
+    /**
+     * Run $work with this coroutine's EntityManager, resetting it afterwards.
+     *
+     * The slot itself is returned when the coroutine ends, so this is now a
+     * convenience rather than the only safe way to take a checkout.
      *
      * @template T
      * @param callable(EntityManagerInterface): T $work
@@ -177,14 +294,48 @@ abstract class DbConnection
     }
 
     /**
-     * Return an EntityManager to the pool, reset and safe for the next caller.
+     * Reset an EntityManager the caller has finished with.
+     *
+     * Kept for the hundreds of existing call sites, but no longer the thing
+     * that returns the slot: the coroutine's `defer` hook does that, so a
+     * handler that never reaches its release call no longer strands a slot.
+     *
+     * Within a coroutine this rolls back any abandoned transaction and clears
+     * the identity map, leaving the EntityManager usable for the rest of the
+     * request. Outside a coroutine the caller owns the EntityManager outright,
+     * so it is returned to the pool here as before.
+     */
+    public function releaseConnection(EntityManagerInterface $connection): void
+    {
+        if (!isset(self::$connectionPool[$this->poolId])) {
+            return;
+        }
+
+        $context = Co::getCid() > 0 ? Co::getContext() : null;
+        $key     = self::CONTEXT_KEY . $this->poolId;
+
+        if ($context !== null && ($context[$key] ?? null) === $connection) {
+            // Still the coroutine's own EntityManager. Reset it, but leave the
+            // slot held until the coroutine ends — releasing it here would let
+            // the same request keep using an EntityManager another coroutine
+            // had already taken.
+            $this->reset($connection);
+
+            return;
+        }
+
+        $this->returnToPool($connection);
+    }
+
+    /**
+     * Put an EntityManager back, reset and safe for the next caller.
      *
      * Rolls back any transaction the caller abandoned and clears the identity
      * map — without the clear, a pooled EntityManager keeps every entity it
      * has ever loaded, which both grows unboundedly and lets a later request
      * read another request's entity instead of querying the database.
      */
-    public function releaseConnection(EntityManagerInterface $connection): void
+    private function returnToPool(EntityManagerInterface $connection): void
     {
         $pool = self::$connectionPool[$this->poolId] ?? null;
 
@@ -216,6 +367,14 @@ abstract class DbConnection
     {
         foreach (self::$connectionPool as $pool) {
             $pool->fill();
+        }
+
+        // Start the idle-connection downscalers here rather than in the
+        // constructor: they register Timers, and the constructor runs in the
+        // master process before the fork. Started from onWorkerStart, each
+        // worker gets its own timer against its own pool.
+        foreach (self::$scaler as $scaler) {
+            $scaler->run();
         }
     }
 
@@ -252,6 +411,18 @@ abstract class DbConnection
         foreach (array_keys(self::$connectionPool) as $poolId) {
             self::drain($poolId);
         }
+
+        // Stop the downscale timers before dropping the raw connections they
+        // poll, or the tick fires against a closed pool during shutdown.
+        foreach (self::$scaler as $scaler) {
+            $scaler->close();
+        }
+        self::$scaler = [];
+
+        foreach (self::$driverPool as $pool) {
+            $pool->close();
+        }
+        self::$driverPool = [];
     }
 
     /**
