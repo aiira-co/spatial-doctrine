@@ -4,12 +4,14 @@
   "type": "library",
   "version": "4.0.1",
   "require": {
-    "php": "^8.2",
+    "php": "^8.4",
     "doctrine/orm": "^3.3.1",
     "ramsey/uuid-doctrine": "^2.1.0",
     "oro/doctrine-extensions": "^3.0-alpha4",
     "opsway/doctrine-dbal-swoole-pgsql-driver": "^4.0.0",
-    "opsway/doctrine-orm-swoole": "^2"
+    "opsway/doctrine-orm-swoole": "^2",
+    "openswoole/core": "^22.1",
+    "spatial/core": "^4.2"
   },
   "license": "MIT",
   "authors": [
@@ -22,10 +24,13 @@
   ],
   "autoload": {
     "psr-4": {
-      "Spatial\\Entity\\": "/src"
+      "Spatial\\Entity\\": "src/"
     }
   },
   "require-dev": {
     "openswoole/ide-helper": "^4.11"
+  },
+  "scripts": {
+    "test": "php tests/pool-lease-test.php"
   }
 }
