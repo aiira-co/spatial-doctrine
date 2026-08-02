@@ -224,7 +224,20 @@ namespace Spatial\Entity\Test {
 
 namespace {
 
-    require __DIR__ . '/../../spatial-core/src/core/Exception/HttpAwareExceptionInterface.php';
+    // spatial/core sits beside this package in the workspace and under
+    // vendor/spatial/core once installed.
+    (static function (): void {
+        foreach (['/../../spatial-core', '/../../core'] as $base) {
+            $path = __DIR__ . $base . '/src/core/Exception/HttpAwareExceptionInterface.php';
+            if (is_file($path)) {
+                require $path;
+
+                return;
+            }
+        }
+        fwrite(STDERR, "Could not locate spatial/core's HttpAwareExceptionInterface.\n");
+        exit(1);
+    })();
     require __DIR__ . '/../src/Connection/EntityManagerConfig.php';
     require __DIR__ . '/../src/Connection/EntityManagerFactory.php';
     require __DIR__ . '/../src/Pool/PoolConfig.php';
