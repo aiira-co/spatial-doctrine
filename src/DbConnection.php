@@ -17,6 +17,7 @@ use Spatial\Entity\Driver\PgSQL\Scaler;
 use Spatial\Entity\Exception\PoolExhaustedException;
 use Spatial\Entity\Pool\PoolConfig;
 use Spatial\Entity\Pool\PoolStats;
+use Spatial\Entity\Telemetry\Dbal\OpenTelemetryMiddleware as DbalOpenTelemetryMiddleware;
 use Throwable;
 
 use function defer;
@@ -138,6 +139,11 @@ abstract class DbConnection
         try {
             $doctrine = new DoctrineEntity($domain);
 
+            // Outermost middleware: one CLIENT span per query. No-op when the
+            // SDK is not configured. Always installed so services do not need
+            // a separate switch beyond having OTEL_EXPORTER_OTLP_ENDPOINT set.
+            $middlewares = [new DbalOpenTelemetryMiddleware()];
+
             // Leading backslash trimmed because ::class never carries one but
             // configs conventionally write \Fully\Qualified\Name. Comparing the
             // two verbatim quietly skipped the middleware, and the driver then
@@ -152,9 +158,7 @@ abstract class DbConnection
                     $params + ['poolId' => $this->poolId]
                 );
 
-                $doctrine->getDoctrineConfig()->setMiddlewares([
-                    new DriverMiddleware($pool)
-                ]);
+                $middlewares[] = new DriverMiddleware($pool);
 
                 // Built here but deliberately not started: run() registers a
                 // Timer, and this constructor runs in the master process before
@@ -166,6 +170,8 @@ abstract class DbConnection
                     (int)($params['tickFrequency'] ?? 1000)
                 );
             }
+
+            $doctrine->getDoctrineConfig()->setMiddlewares($middlewares);
 
             $this->entityManager = fn(): EntityManagerInterface => $doctrine->entityManager($params);
         } catch (Exception $e) {
