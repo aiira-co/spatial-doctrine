@@ -445,7 +445,7 @@ abstract class DbConnection
         if (Co::getCid() > 0) {
             self::drainAll();
         } else {
-            Co\run(static fn() => self::drainAll());
+            Co::run(static fn() => self::drainAll());
         }
 
         // Stop the downscale timers before dropping the raw connections they
