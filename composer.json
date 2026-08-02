@@ -9,7 +9,7 @@
     "oro/doctrine-extensions": "^3.0-alpha4",
     "opsway/doctrine-dbal-swoole-pgsql-driver": "^4.0.0",
     "opsway/doctrine-orm-swoole": "^2",
-    "openswoole/core": "^22.1",
+    "openswoole/core": "^22.1 || ^26.0",
     "spatial/core": "^4.2"
   },
   "license": "MIT",
