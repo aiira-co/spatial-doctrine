@@ -39,7 +39,7 @@ final class Connection extends AbstractConnectionMiddleware
         return $this->trace($sql, fn() => parent::query($sql));
     }
 
-    public function exec(string $sql): int
+    public function exec(string $sql): int|string
     {
         return $this->trace($sql, fn() => parent::exec($sql));
     }
@@ -47,25 +47,31 @@ final class Connection extends AbstractConnectionMiddleware
     /**
      * {@inheritDoc}
      */
-    public function beginTransaction()
+    public function beginTransaction(): void
     {
-        return $this->trace('BEGIN', fn() => parent::beginTransaction());
+        $this->trace('BEGIN', function (): void {
+            parent::beginTransaction();
+        });
     }
 
     /**
      * {@inheritDoc}
      */
-    public function commit()
+    public function commit(): void
     {
-        return $this->trace('COMMIT', fn() => parent::commit());
+        $this->trace('COMMIT', function (): void {
+            parent::commit();
+        });
     }
 
     /**
      * {@inheritDoc}
      */
-    public function rollBack()
+    public function rollBack(): void
     {
-        return $this->trace('ROLLBACK', fn() => parent::rollBack());
+        $this->trace('ROLLBACK', function (): void {
+            parent::rollBack();
+        });
     }
 
     /**
