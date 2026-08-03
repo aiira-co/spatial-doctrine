@@ -8,7 +8,8 @@
     "ramsey/uuid-doctrine": "^2.1.0",
     "oro/doctrine-extensions": "^3.0-alpha4",
     "openswoole/core": "^22.1 || ^26.0",
-    "spatial/core": "^4.2"
+    "spatial/core": "^4.2",
+    "symfony/cache": "^6.4 || ^7.0 || ^8.0"
   },
   "license": "MIT",
   "authors": [
@@ -29,6 +30,7 @@
   },
   "scripts": {
     "test": "php tests/pool-lease-test.php",
+    "test:cache": "php tests/doctrine-cache-test.php",
     "test:coroutine": "php tests/coroutine-scope-test.php",
     "test:driver": "php tests/driver-conformance.php"
   }

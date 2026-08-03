@@ -17,6 +17,7 @@ use Doctrine\ORM\ORMException;
 use Doctrine\ORM\Proxy\ProxyFactory;
 use Doctrine\Persistence\Mapping\Driver\MappingDriver;
 use Doctrine\Persistence\Mapping\Driver\PHPDriver;
+use Spatial\Entity\Cache\DoctrineCacheFactory;
 
 class DoctrineEntity
 {
@@ -143,6 +144,8 @@ class DoctrineEntity
         // Add custom DQL functions
         $this->registerCustomDqlFunctions($config);
 
+        $this->configureCaches($config);
+
         return $config;
     }
 
@@ -198,6 +201,16 @@ class DoctrineEntity
                 Type::addType($typeName, $typeClass);
             }
         }
+    }
+
+    /**
+     * Wire metadata, query and result caches from doctrine.yaml.
+     */
+    private function configureCaches(Configuration $config): void
+    {
+        $config->setMetadataCache(DoctrineCacheFactory::create('metadata'));
+        $config->setQueryCache(DoctrineCacheFactory::create('query'));
+        $config->setResultCache(DoctrineCacheFactory::create('result'));
     }
 
     /**
